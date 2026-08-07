@@ -1,0 +1,203 @@
+name: EmucoreX Alpha Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Build type"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - debug
+          - release
+
+permissions:
+  contents: write
+
+env:
+  NDK_VERSION: "27.0.12077973"
+  CMAKE_VERSION: "3.22.1"
+  GRADLE_OPTS: "-Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dorg.gradle.jvmargs=-Xmx4g"
+
+jobs:
+  build:
+    name: Build APK (${{ github.event.inputs.build_type }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Cache Gradle Wrapper
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/wrapper
+          key: gradle-wrapper-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-wrapper-
+
+      - name: Resolve PCSX2 case mismatch
+        run: |
+          cd app/src/main/cpp
+          if [ -d pcsx2 ] && [ ! -e PCSX2 ]; then
+            ln -s pcsx2 PCSX2
+            echo "Created symbolic link PCSX2 -> pcsx2"
+          elif [ -e PCSX2 ]; then
+            echo "Link PCSX2 already exists. Skipping."
+          else
+            echo "Directory pcsx2 not found. Skipping."
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+          cache: "gradle"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Android NDK and CMake
+        id: cache-ndk
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+            ${{ env.ANDROID_HOME }}/cmake/${{ env.CMAKE_VERSION }}
+          key: android-ndk-${{ env.NDK_VERSION }}-cmake-${{ env.CMAKE_VERSION }}
+          restore-keys: |
+            android-ndk-${{ env.NDK_VERSION }}-
+
+      - name: Install Android NDK and CMake
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "ndk;${{ env.NDK_VERSION }}" "cmake;${{ env.CMAKE_VERSION }}"
+
+      - name: Cache native build objects
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/.cxx
+          key: cxx-${{ runner.os }}-${{ github.event.inputs.build_type }}-${{ hashFiles('app/src/main/cpp/**/CMakeLists.txt') }}
+          restore-keys: |
+            cxx-${{ runner.os }}-${{ github.event.inputs.build_type }}-
+
+      - name: Grant execute permission to gradlew
+        run: chmod +x gradlew
+
+      - name: Download PCSX2 patches
+        run: |
+          PATCHES_DIR="app/src/main/cpp/PCSX2/bin/resources"
+          PATCHES_FILE="$PATCHES_DIR/patches.zip"
+          if [ ! -f "$PATCHES_FILE" ]; then
+            mkdir -p "$PATCHES_DIR"
+            curl -fL -o "$PATCHES_FILE" "https://github.com/PCSX2/pcsx2_patches/releases/latest/download/patches.zip"
+          fi
+
+      - name: Bootstrap google-services.json
+        run: |
+          if [ ! -f app/google-services.json ]; then
+            echo "::warning::app/google-services.json not found, generating a placeholder so the Firebase plugin does not fail the build."
+            cat > app/google-services.json << 'EOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "placeholder-project",
+              "storage_bucket": "placeholder-project.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": {
+                    "package_name": "com.sbro.emucorex"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [
+                  { "current_key": "placeholder-key" }
+                ],
+                "services": {}
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+          fi
+
+      - name: Build APK
+        id: find_apk
+        run: |
+          BUILD_START=$(date +%s)
+          ./gradlew :app:assemble${{ github.event.inputs.build_type == 'release' && 'Release' || 'Debug' }} --build-cache --stacktrace --no-daemon
+          BUILD_END=$(date +%s)
+          echo "build_seconds=$((BUILD_END - BUILD_START))" >> "$GITHUB_OUTPUT"
+
+          # Locate the most recently modified APK
+          APK_PATH=$(ls -t app/build/outputs/apk/**/*.apk 2>/dev/null | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::No APK file was produced."
+            exit 1
+          fi
+          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+
+      - name: Sign release
+        if: ${{ github.event.inputs.build_type == 'release' }}
+        run: |
+          KEYSTORE=~/.android/release.keystore
+          mkdir -p ~/.android
+          if [ ! -f "$KEYSTORE" ]; then
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE" -storetype PKCS12 \
+              -alias emucorex-ci -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$KS_PASS" -keypass "$KEY_PASS" \
+              -dname "CN=EmuCoreX CI, OU=CI, O=CI, L=CI, S=CI, C=US"
+          fi
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks "$KEYSTORE" --ks-pass pass:"$KS_PASS" --key-pass pass:"$KEY_PASS" \
+            --ks-key-alias emucorex-ci \
+            "${{ steps.find_apk.outputs.apk_path }}"
+          "$BUILD_TOOLS/apksigner" verify "${{ steps.find_apk.outputs.apk_path }}"
+        env:
+          KS_PASS: emucorex-ci-temp
+          KEY_PASS: emucorex-ci-temp
+  
+      - name: Create Git Tag
+        id: create_tag
+        run: |
+          VERSION_NAME="$(grep 'versionName' app/build.gradle.kts | sed -n 's/.*?:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+          VERSION_NAME="${VERSION_NAME:-nightly}"
+          TAG="${VERSION_NAME}-build.${{ github.run_number }}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "Alpha build ${{ github.run_number }}"
+          git push origin "${TAG}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.create_tag.outputs.tag }}
+          name: Alpha ${{ steps.create_tag.outputs.tag }}
+          body: |
+            ## EmucoreX Android Alpha Build
+            **Note:** This Version Only Testing
+            - Build number: ${{ github.run_number }}
+            - Commit: ${{ github.sha }}
+            - Triggered by: ${{ github.actor }}
+          files: |
+            app/build/outputs/apk/**/*.apk
+          draft: false
+          prerelease: true
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

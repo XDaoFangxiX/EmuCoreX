@@ -19,11 +19,11 @@ env:
   NDK_VERSION: "27.0.12077973"
   CMAKE_VERSION: "3.22.1"
   GRADLE_OPTS: "-Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
-  BUILD_TYPE_LOWER: ${{ github.event.inputs.build_type }}
-  
+  BUILD_TYPE_LOWER: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_type || 'release' }}
+
 jobs:
   build:
-    name: Build APK (${{ github.event.inputs.build_type }})
+    name: Build APK (${{ env.BUILD_TYPE_LOWER }})
     runs-on: ubuntu-24.04
     timeout-minutes: 90
 
@@ -219,7 +219,7 @@ jobs:
           "${BUILD_TOOLS_DIR}/apksigner" verify --verbose "$APK_PATH"
 
       - name: Create Git Tag and GitHub Release
-        if: env.BUILD_TYPE_LOWER == '${{ github.event.inputs.build_type }}'
+        if: env.BUILD_TYPE_LOWER == 'release'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -240,7 +240,7 @@ jobs:
           
           APK_PATH="${{ steps.build_apk.outputs.apk_path }}"
           gh release create "$TAG" \
-            --title "${{ github.event.inputs.build_type }} $TAG" \
+            --title "Release $TAG" \
             --notes "Build from commit $GITHUB_SHA" \
             "$APK_PATH"
 

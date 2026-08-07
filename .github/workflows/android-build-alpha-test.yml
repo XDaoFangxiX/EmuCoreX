@@ -1,4 +1,4 @@
-name: Build EmuCoreX Alpha
+name: EmuCoreX Alpha Test
 
 on:
   workflow_dispatch:

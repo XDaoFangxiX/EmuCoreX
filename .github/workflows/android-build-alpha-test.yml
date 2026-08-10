@@ -1,4 +1,4 @@
-name: EmuCoreX Alpha Test
+name: Build EmuCoreX Test
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
           - release
 
 permissions:
-  contents: write   # required to create tags and releases
+  contents: read
 
 env:
   NDK_VERSION: "27.0.12077973"
@@ -25,6 +25,7 @@ jobs:
   build:
     name: Build APK (${{ github.event.inputs.build_type }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -71,9 +72,9 @@ jobs:
           path: |
             ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
             ${{ env.ANDROID_HOME }}/cmake/${{ env.CMAKE_VERSION }}
-          key: android-ndk-${{ env.NDK_VERSION }}-cmake-${{ env.CMAKE_VERSION }}
+          key: android-ndk-${{ env.NDK_VERSION }}-cmake-${{ env.CMAKE_VERSION }}-v2
           restore-keys: |
-            android-ndk-${{ env.NDK_VERSION }}-
+            android-ndk-${{ env.NDK_VERSION }}-cmake-${{ env.CMAKE_VERSION }}
 
       - name: Install Android NDK and CMake
         if: steps.cache-ndk.outputs.cache-hit != 'true'
@@ -96,7 +97,7 @@ jobs:
         with:
           path: |
             app/.cxx
-          key: cxx-${{ runner.os }}-${{ env.BUILD_TYPE_LOWER }}-${{ hashFiles('app/src/main/cpp/**/CMakeLists.txt') }}
+          key: cxx-${{ runner.os }}-${{ env.BUILD_TYPE_LOWER }}-${{ hashFiles('app/src/main/cpp/**/CMakeLists.txt', 'app/src/main/cpp/**/*.cmake') }}
           restore-keys: |
             cxx-${{ runner.os }}-${{ env.BUILD_TYPE_LOWER }}-
 
@@ -107,14 +108,19 @@ jobs:
         run: |
           PATCHES_DIR="app/src/main/cpp/PCSX2/bin/resources"
           PATCHES_FILE="$PATCHES_DIR/patches.zip"
-          if [ ! -f "$PATCHES_FILE" ]; then
+          if [ ! -f "$PATCHES_FILE" ] && [ ! -f "$PATCHES_DIR/patches.xml" ]; then
             mkdir -p "$PATCHES_DIR"
             echo "Downloading PCSX2 patches..."
-            curl -fsSL -o "$PATCHES_FILE" "https://github.com/PCSX2/pcsx2_patches/releases/latest/download/patches.zip" || {
+            if curl -fsSL -o "$PATCHES_FILE" "https://github.com/PCSX2/pcsx2_patches/releases/latest/download/patches.zip"; then
+              echo "Patches downloaded successfully."
+              if command -v unzip &> /dev/null; then
+                unzip -qo "$PATCHES_FILE" -d "$PATCHES_DIR" && echo "Patches extracted successfully."
+              fi
+            else
               echo "::warning::Failed to download patches. Continuing without them."
-            }
+            fi
           else
-            echo "Patches file already exists. Skipping download."
+            echo "Patches already exist. Skipping download."
           fi
 
       - name: Bootstrap google-services.json
@@ -153,19 +159,29 @@ jobs:
         run: |
           BUILD_START=$(date +%s)
           BUILD_VARIANT=$(echo "${{ env.BUILD_TYPE_LOWER }}" | sed 's/.*/\u&/')
-          ./gradlew ":app:assemble${BUILD_VARIANT}" --build-cache --stacktrace --no-daemon --parallel --configure-on-demand
+          ./gradlew ":app:assemble${BUILD_VARIANT}" \
+            --build-cache \
+            --stacktrace \
+            --no-daemon \
+            --parallel \
+            --configure-on-demand \
+            -Dorg.gradle.workers.max=4 \
+            -Dkotlin.incremental=true \
+            -Dkotlin.compiler.execution.strategy=in-process
           BUILD_END=$(date +%s)
           BUILD_DURATION=$((BUILD_END - BUILD_START))
           echo "build_seconds=${BUILD_DURATION}" >> "$GITHUB_OUTPUT"
           
-          # Locate the most recently modified APK
-          APK_PATH=$(find app/build/outputs/apk -name "*.apk" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -n 1 | cut -d' ' -f2-)
-          if [ -z "$APK_PATH" ]; then
+          shopt -s nullglob
+          APK_FILES=(app/build/outputs/apk/**/*.apk)
+          if [ ${#APK_FILES[@]} -gt 0 ]; then
+            APK_PATH=$(ls -t "${APK_FILES[@]}" | head -n1)
+            echo "apk_path=${APK_PATH}" >> "$GITHUB_OUTPUT"
+            echo "APK found at: ${APK_PATH}"
+          else
             echo "::error::No APK file was produced. Check build logs for errors."
             exit 1
           fi
-          echo "apk_path=${APK_PATH}" >> "$GITHUB_OUTPUT"
-          echo "APK found at: ${APK_PATH}"
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
 
@@ -182,9 +198,9 @@ jobs:
         if: ${{ env.BUILD_TYPE_LOWER == 'release' }}
         run: |
           KEYSTORE_PATH="${HOME}/.android/release.keystore"
-          KEY_ALIAS="emucorex-ci"
-          KS_PASSWORD="emucorex-ci-temp"
-          KEY_PASSWORD="emucorex-ci-temp"
+          KEY_ALIAS="${KEY_ALIAS:-emucorex-ci}"
+          KS_PASSWORD="${KEYSTORE_PASSWORD:-emucorex-ci-temp}"
+          KEY_PASSWORD="${KEY_PASSWORD:-emucorex-ci-temp}"
           
           mkdir -p "${HOME}/.android"
           
@@ -217,31 +233,14 @@ jobs:
           echo "Verifying signature..."
           "${BUILD_TOOLS_DIR}/apksigner" verify --verbose "$APK_PATH"
 
-      - name: Create Git Tag and GitHub Release
-        if: env.BUILD_TYPE_LOWER == 'release'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Extract versionName from build.gradle
-          VERSION_NAME=$(grep 'versionName' app/build.gradle | awk -F '"' '{print $2}')
-          if [ -z "$VERSION_NAME" ]; then
-            VERSION_NAME="0.0.0"
-          fi
-          
-          TAG="v${VERSION_NAME}-${GITHUB_RUN_NUMBER}"
-          echo "Tag: $TAG"
-          
-          git tag "$TAG"
-          git push origin "$TAG"
-          
-          APK_PATH="${{ steps.build_apk.outputs.apk_path }}"
-          gh release create "$TAG" \
-            --title "Release $TAG" \
-            --notes "Build from commit $GITHUB_SHA" \
-            "$APK_PATH"
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmuCoreX-${{ env.BUILD_TYPE_LOWER }}-${{ github.run_number }}
+          path: ${{ steps.build_apk.outputs.apk_path }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 9
 
       - name: Generate build summary
         if: always()
@@ -251,9 +250,11 @@ jobs:
           if [ -f "$APK_PATH" ]; then
             APK_SIZE=$(du -h "$APK_PATH" | cut -f1)
             APK_SHA256=$(sha256sum "$APK_PATH" | cut -d' ' -f1)
+            APK_INFO=$(file "$APK_PATH" | cut -d':' -f2- | xargs)
           else
             APK_SIZE="N/A"
             APK_SHA256="N/A"
+            APK_INFO="N/A"
           fi
           
           BUILD_SECS=${{ steps.build_apk.outputs.build_seconds }}
@@ -268,9 +269,12 @@ jobs:
             echo "| Build type | \`${{ env.BUILD_TYPE_LOWER }}\` |"
             echo "| APK path | \`${APK_PATH}\` |"
             echo "| Size | ${APK_SIZE} |"
+            echo "| File type | ${APK_INFO} |"
             echo "| Build time | ${BUILD_MINS}m ${BUILD_REM_SECS}s |"
             echo "| Commit | \`${GITHUB_SHA:0:7}\` |"
             echo "| SHA256 | \`${APK_SHA256}\` |"
             echo "| NDK Version | \`${{ env.NDK_VERSION }}\` |"
             echo "| CMake Version | \`${{ env.CMAKE_VERSION }}\` |"
+            echo ""
+            echo " **APK Download:** [EmuCoreX-${{ env.BUILD_TYPE_LOWER }}-${{ github.run_number }}.apk](${{ steps.build_apk.outputs.apk_path }})"
           } >> "$GITHUB_STEP_SUMMARY"

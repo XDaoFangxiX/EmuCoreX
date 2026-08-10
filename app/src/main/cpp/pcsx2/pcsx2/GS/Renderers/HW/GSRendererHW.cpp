@@ -88,6 +88,29 @@ __ri static constexpr std::size_t GSMediumBlendSpriteSWLimit(const GSDevice::Fea
 {
 	return 100;
 }
+
+// Page-aligned GS clears operate on at least one 8 KiB page at a time. Unrolling the
+// masked read/modify/write loop exposes enough independent memory operations for
+// mobile cores to overlap their load/store latency, instead of serializing every
+// 16-byte vector behind a loop branch.
+__noinline static void GSMaskedFill(GSVector4i* RESTRICT ptr, const GSVector4i* ptr_end,
+	const GSVector4i& mask, const GSVector4i& color)
+{
+	while ((ptr_end - ptr) >= 4)
+	{
+		ptr[0] = (ptr[0] & mask) | color;
+		ptr[1] = (ptr[1] & mask) | color;
+		ptr[2] = (ptr[2] & mask) | color;
+		ptr[3] = (ptr[3] & mask) | color;
+		ptr += 4;
+	}
+
+	while (ptr != ptr_end)
+	{
+		*ptr = (*ptr & mask) | color;
+		ptr++;
+	}
+}
 }
 
 GSRendererHW::GSRendererHW()
@@ -103,6 +126,7 @@ GSRendererHW::GSRendererHW()
 
 	// Hope nothing requires too many draw calls.
 	m_drawlist.reserve(2048);
+	m_drawlist_bbox.reserve(2048);
 
 	memset(static_cast<void*>(&m_conf), 0, sizeof(m_conf));
 
@@ -5934,8 +5958,9 @@ void GSRendererHW::EmulateBlending(int rt_alpha_min, int rt_alpha_max, DATEOptio
 	// Replace Ad with As, blend flags will be used from As since we are chaging the blend_index value.
 	// Must be done before index calculation, after blending equation optimizations
 	const bool blend_ad = m_conf.ps.blend_c == 1;
-	// On Vulkan without framebuffer fetch this path forces thousands of RT feedback reads in blend-heavy
-	// scenes. Keep it only where feedback is cheap, or where the fallback path already copies the RT.
+	// Without framebuffer fetch this shortcut turns alpha-masked Ad blends into thousands of
+	// render-target feedback barriers in blend-heavy scenes. Keep it where feedback is ordered
+	// in tile memory, or where the backend already uses the copy-based fallback.
 	const bool fast_ad_alpha_masked_feedback = features.framebuffer_fetch || !features.texture_barrier;
 	bool blend_ad_alpha_masked = blend_ad && !m_conf.colormask.wa && fast_ad_alpha_masked_feedback;
 	const bool is_basic_blend = GSConfig.AccurateBlendingUnit != AccBlendLevel::Minimum;
@@ -9454,11 +9479,7 @@ void GSRendererHW::ClearGSLocalMemory(const GSOffset& off, const GSVector4i& r, 
 				GSVector4i* const ptr_end = ptr + iterations_per_page;
 				if (drawing_mask)
 				{
-					while (ptr != ptr_end)
-					{
-						*ptr = (*ptr & mask) | vcolor;
-						ptr++;
-					}
+					GSMaskedFill(ptr, ptr_end, mask, vcolor);
 				}
 				else
 				{
@@ -9478,11 +9499,7 @@ void GSRendererHW::ClearGSLocalMemory(const GSOffset& off, const GSVector4i& r, 
 				current_page &= (GS_MAX_PAGES - 1);
 				GSVector4i* ptr = reinterpret_cast<GSVector4i*>(m_mem.vm8() + current_page * GS_PAGE_SIZE);
 				GSVector4i* const ptr_end = ptr + iterations_per_page;
-				while (ptr != ptr_end)
-				{
-					*ptr = (*ptr & mask) | vcolor;
-					ptr++;
-				}
+				GSMaskedFill(ptr, ptr_end, mask, vcolor);
 			}
 		}
 		else if (format == GSLocalMemory::PSM_FMT_16)
@@ -9502,11 +9519,7 @@ void GSRendererHW::ClearGSLocalMemory(const GSOffset& off, const GSVector4i& r, 
 				GSVector4i* const ptr_end = ptr + iterations_per_page;
 				if (converted_mask)
 				{
-					while (ptr != ptr_end)
-					{
-						*ptr = (*ptr & mask) | vcolor;
-						ptr++;
-					}
+					GSMaskedFill(ptr, ptr_end, mask, vcolor);
 				}
 				else
 				{

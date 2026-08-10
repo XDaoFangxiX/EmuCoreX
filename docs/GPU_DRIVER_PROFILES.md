@@ -33,20 +33,21 @@ The runtime policy is capability-first:
 Currently enforced renderer actions include:
 
 - component-wise vector bitwise operations in Mali TFX/convert shaders;
-- boolean-negation rewriting in proprietary Adreno OpenGL TFX shaders;
 - constant-index selection for the affected legacy Mali uniform-matrix access;
 - isolated bitwise-negation temporaries before the fixed PowerVR 1.8@4693462 driver;
 - descriptor-set fallback for proprietary Mali and PowerVR Vulkan;
-- disabling unreliable ROAA framebuffer fetch on Adreno Vulkan, including Turnip, and on
-  proprietary Mali and PowerVR Vulkan while retaining the texture-barrier feedback path;
-- disabling proprietary Adreno provoking vertex;
+- enabling ROAA framebuffer fetch when the Vulkan extension and its color-attachment feature are
+  exposed, except on Vulkan Adreno where proprietary and Turnip drivers can return stale
+  destination color; those devices retain the explicit feedback path;
+- disabling unreliable ROAA framebuffer fetch on proprietary Mali and PowerVR Vulkan while
+  retaining the texture-barrier feedback path;
+- enabling provoking-vertex support only when both its Vulkan extension and last-vertex feature are exposed;
 - high-precision D32S8 depth on capable devices, with D24S8 used only as a format-capability fallback;
-- blend-based preservation of fully masked RGB on Adreno 5xx depth-tested draws;
 - materializing lazy clears before PowerVR render passes only on the affected 1.7–1.9 driver range;
 - manual framebuffer-blit mip generation only for tall legacy PowerVR SGX textures;
 - legacy PowerVR swapchain-width alignment at the pinned driver cutoff;
 - disabling attachment-feedback-loop layout on proprietary Mali and PowerVR;
-- coherent Vulkan readback memory on proprietary Mali and Adreno;
+- coherent Vulkan readback memory on proprietary Mali;
 - Mali-G57 FIFO present fallback on proprietary OpenGL ES and Vulkan drivers.
 
 All mobile GPU tiers retain the complete GS resource policy: 300 pooled targets with an age of 20 frames

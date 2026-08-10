@@ -105,6 +105,9 @@ public:
 	/// Returns true if running on a Qualcomm Adreno GPU.
 	__fi bool IsDeviceAdreno() const { return (m_device_properties.vendorID == 0x5143u); }
 
+	/// Returns true if running on an Imagination Technologies PowerVR GPU.
+	__fi bool IsDevicePowerVR() const { return (m_device_properties.vendorID == 0x1010u); }
+
 	// Creates a simple render pass.
 	VkRenderPass GetRenderPass(VkFormat color_format, VkFormat depth_format,
 		VkAttachmentLoadOp color_load_op = VK_ATTACHMENT_LOAD_OP_LOAD,
@@ -442,6 +445,9 @@ private:
 	std::unordered_map<GSHWDrawConfig::PSSelector, VkShaderModule, GSHWDrawConfig::PSSelectorHash>
 		m_tfx_fragment_shaders;
 	std::unordered_map<PipelineSelector, VkPipeline, PipelineSelectorHash> m_tfx_pipelines;
+	PipelineSelector m_last_tfx_pipeline_selector = {};
+	VkPipeline m_last_tfx_pipeline = VK_NULL_HANDLE;
+	bool m_last_tfx_pipeline_valid = false;
 
 	VkRenderPass m_utility_color_render_pass_load = VK_NULL_HANDLE;
 	VkRenderPass m_utility_color_render_pass_clear = VK_NULL_HANDLE;

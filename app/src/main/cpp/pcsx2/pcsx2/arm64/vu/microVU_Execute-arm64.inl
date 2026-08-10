@@ -41,6 +41,12 @@ static __fi void mVUExecuteOakLoadRuntimeBases()
 	oakMoveAddressToReg(OAK_XVUCLAMP, &g_cpuRegistersPack.mVUglob);
 }
 
+static __fi void mVUExecuteOakLoadMemoryBase(mV)
+{
+	oakLoad64(oakXRegister(VU_HOST_MEMBASE),
+		mVUExecuteOakCpuMem(static_cast<s64>(offsetof(cpuRegistersPack, vuRegs[mVU.index].Mem))));
+}
+
 static __fi void mVUExecuteOakLoadFpcr(OakMemOperand mem)
 {
 	oakLoad64(OAK_XSCRATCH, mem);
@@ -65,7 +71,16 @@ static void mVUExecuteOakBeginStackFrame(bool save_fpr = true)
 {
 	using namespace oak::util;
 
-	oakAsm->SUB(SP, SP, save_fpr ? 160 : 96);
+#if defined(__ANDROID__)
+	// Standalone Android microVU blocks keep D8-D14 out of the allocator. D15 is
+	// the only callee-saved SIMD register they use (for the persistent P/Q state),
+	// so preserving all eight ABI registers only adds stack traffic at every VU
+	// dispatcher entry. Keep the frame 16-byte aligned and preserve only D15.
+	constexpr u32 fpr_frame_size = 112;
+#else
+	constexpr u32 fpr_frame_size = 160;
+#endif
+	oakAsm->SUB(SP, SP, save_fpr ? fpr_frame_size : 96);
 	oakAsm->STP(X19, X20, SP, oak::SOffset<10, 3>(0));
 	oakAsm->STP(X21, X22, SP, oak::SOffset<10, 3>(16));
 	oakAsm->STP(X23, X24, SP, oak::SOffset<10, 3>(32));
@@ -74,10 +89,14 @@ static void mVUExecuteOakBeginStackFrame(bool save_fpr = true)
 	oakAsm->STP(X29, X30, SP, oak::SOffset<10, 3>(80));
 	if (save_fpr)
 	{
+#if defined(__ANDROID__)
+		oakAsm->STR(oakDRegister(15), SP, oak::POffset<15, 3>(96));
+#else
 		oakAsm->STP(oakDRegister(8), oakDRegister(9), SP, oak::SOffset<10, 3>(96));
 		oakAsm->STP(oakDRegister(10), oakDRegister(11), SP, oak::SOffset<10, 3>(112));
 		oakAsm->STP(oakDRegister(12), oakDRegister(13), SP, oak::SOffset<10, 3>(128));
 		oakAsm->STP(oakDRegister(14), oakDRegister(15), SP, oak::SOffset<10, 3>(144));
+#endif
 	}
 }
 
@@ -85,12 +104,22 @@ static void mVUExecuteOakEndStackFrame(bool save_fpr = true)
 {
 	using namespace oak::util;
 
+#if defined(__ANDROID__)
+	constexpr u32 fpr_frame_size = 112;
+#else
+	constexpr u32 fpr_frame_size = 160;
+#endif
+
 	if (save_fpr)
 	{
+#if defined(__ANDROID__)
+		oakAsm->LDR(oakDRegister(15), SP, oak::POffset<15, 3>(96));
+#else
 		oakAsm->LDP(oakDRegister(14), oakDRegister(15), SP, oak::SOffset<10, 3>(144));
 		oakAsm->LDP(oakDRegister(12), oakDRegister(13), SP, oak::SOffset<10, 3>(128));
 		oakAsm->LDP(oakDRegister(10), oakDRegister(11), SP, oak::SOffset<10, 3>(112));
 		oakAsm->LDP(oakDRegister(8), oakDRegister(9), SP, oak::SOffset<10, 3>(96));
+#endif
 	}
 	oakAsm->LDP(X29, X30, SP, oak::SOffset<10, 3>(80));
 	oakAsm->LDP(X27, X28, SP, oak::SOffset<10, 3>(64));
@@ -98,7 +127,7 @@ static void mVUExecuteOakEndStackFrame(bool save_fpr = true)
 	oakAsm->LDP(X23, X24, SP, oak::SOffset<10, 3>(32));
 	oakAsm->LDP(X21, X22, SP, oak::SOffset<10, 3>(16));
 	oakAsm->LDP(X19, X20, SP, oak::SOffset<10, 3>(0));
-	oakAsm->ADD(SP, SP, save_fpr ? 160 : 96);
+	oakAsm->ADD(SP, SP, save_fpr ? fpr_frame_size : 96);
 }
 
 // Generates the code for entering/exit recompiled blocks
@@ -118,6 +147,10 @@ void mVUdispatcherAB(mV)
         else        {
             oakEmitCall(reinterpret_cast<void*>(mVUexecuteVU1));
         }
+
+		// X0 contains the compiled entry returned by mVUexecuteVU*. Pin the VU data
+		// memory base without disturbing it; all standalone blocks share this ABI.
+		mVUExecuteOakLoadMemoryBase(mVU);
 
 		// Load VU's MXCSR state
 		if (mvuNeedsFPCRUpdate(mVU)) {
@@ -195,6 +228,7 @@ void mVUdispatcherCD(mV)
 	{
         mVUExecuteOakBeginStackFrame();
 		mVUExecuteOakLoadRuntimeBases();
+		mVUExecuteOakLoadMemoryBase(mVU);
 
         // Load VU's MXCSR state
         if (mvuNeedsFPCRUpdate(mVU)) {

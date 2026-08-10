@@ -13,7 +13,7 @@ on:
           - release
 
 permissions:
-  contents: read
+  contents: write   # required to create releases
 
 env:
   NDK_VERSION: "27.0.12077973"
@@ -233,14 +233,24 @@ jobs:
           echo "Verifying signature..."
           "${BUILD_TOOLS_DIR}/apksigner" verify --verbose "$APK_PATH"
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      # ==== NEW: Create GitHub Release and attach APK ====
+      - name: Create GitHub Release
+        if: success()   # only if build succeeds
+        uses: softprops/action-gh-release@v2
         with:
-          name: EmuCoreX-${{ env.BUILD_TYPE_LOWER }}-${{ github.run_number }}
-          path: ${{ steps.build_apk.outputs.apk_path }}
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 9
+          tag_name: ${{ env.BUILD_TYPE_LOWER }}-${{ github.run_number }}-${{ github.sha }}
+          name: "EmuCoreX ${{ env.BUILD_TYPE_LOWER }} build #${{ github.run_number }}"
+          body: |
+            Automated build for commit `${{ github.sha }}`
+            - Build type: `${{ env.BUILD_TYPE_LOWER }}`
+            - Triggered by: `${{ github.actor }}`
+          files: ${{ steps.build_apk.outputs.apk_path }}
+          draft: false
+          prerelease: ${{ env.BUILD_TYPE_LOWER == 'debug' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ==== REMOVED: "Upload APK artifact" step ====
 
       - name: Generate build summary
         if: always()
@@ -276,5 +286,5 @@ jobs:
             echo "| NDK Version | \`${{ env.NDK_VERSION }}\` |"
             echo "| CMake Version | \`${{ env.CMAKE_VERSION }}\` |"
             echo ""
-            echo " **APK Download:** [EmuCoreX-${{ env.BUILD_TYPE_LOWER }}-${{ github.run_number }}.apk](${{ steps.build_apk.outputs.apk_path }})"
+            echo " **APK available in the Release** — visit this repository's Releases page."
           } >> "$GITHUB_STEP_SUMMARY"

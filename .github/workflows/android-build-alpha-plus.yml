@@ -13,7 +13,7 @@ on:
           - release
 
 permissions:
-  contents: write   # required to create tags and releases
+  contents: write   # required for creating tags and releases
 
 env:
   NDK_VERSION: "29.0.14206865"
@@ -264,10 +264,11 @@ jobs:
         id: version
         if: ${{ env.BUILD_TYPE_LOWER == 'release' }}
         run: |
-          # Create a unique tag based on date and run number
           TAG="v$(date +'%Y%m%d')-${GITHUB_RUN_NUMBER}"
-          echo "version=${TAG}" >> $GITHUB_OUTPUT
-          echo "Generated tag: ${TAG}"
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "build_date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
+          echo "Generated tag: ${TAG}, build date: ${BUILD_DATE}"
 
       - name: Create GitHub Release
         if: ${{ env.BUILD_TYPE_LOWER == 'release' }}
@@ -279,7 +280,7 @@ jobs:
             Automated release for build #${{ github.run_number }}
             - Commit: ${{ github.sha }}
             - Build type: release
-            - Build date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            - Build date: ${{ steps.version.outputs.build_date }}
           files: ${{ steps.build_apk.outputs.apk_path }}
           draft: false
           prerelease: false

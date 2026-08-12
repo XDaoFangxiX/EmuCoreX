@@ -104,6 +104,7 @@ set(pcsx2Sources
 	R5900OpcodeImpl.cpp
 	R5900OpcodeTables.cpp
 	SaveState.cpp
+	SaveStateLegacy.cpp
 	ShiftJisToUnicode.cpp
 	Sif.cpp
 	Sif0.cpp
@@ -181,6 +182,7 @@ set(pcsx2Headers
 	R5900.h
 	R5900OpcodeTables.h
 	SaveState.h
+	SaveStateLegacy.h
 	ShaderCacheVersion.h
 	Sifcmd.h
 	Sif.h
@@ -253,6 +255,7 @@ set(pcsx2SPU2Sources
 	SPU2/RegTable.cpp
 	SPU2/Reverb.cpp
 	SPU2/spu2freeze.cpp
+	SPU2/spu2freeze-legacy.cpp
 	SPU2/spu2sys.cpp
 	SPU2/Wavedump_wav.cpp
 )
@@ -292,6 +295,7 @@ set(pcsx2DEV9Sources
 	DEV9/InternalServers/DNS_Logger.cpp
 	DEV9/InternalServers/DNS_Server.cpp
 	DEV9/LocalLinkAdapter.cpp
+	DEV9/InternetLinkAdapter.cpp
 	DEV9/PacketReader/ARP/ARP_Packet.cpp
 	DEV9/PacketReader/ARP/ARP_PacketEditor.cpp
 	DEV9/PacketReader/IP/ICMP/ICMP_Packet.cpp
@@ -320,11 +324,22 @@ set(pcsx2DEV9Sources
 	DEV9/flash.cpp
 	DEV9/pcap_io.cpp
 	DEV9/net.cpp
+#ARCADE
+	DEV9/ACRAM.cpp
+	DEV9/ACSRAM.cpp
+	DEV9/ACATA.cpp
+	DEV9/ACATA_IO.cpp
+	DEV9/ACATA_IO_CHD.cpp
+	DEV9/ACATAPI.cpp
+	DEV9/ACJV.cpp
+	DEV9/ACUART.cpp
+	DEV9/ACCORE.cpp
 	)
 
 # DEV9 headers
 set(pcsx2DEV9Headers
 	DEV9/AdapterUtils.h
+	DEV9/InternetLinkAdapter.h
 	DEV9/ATA/ATA.h
 	DEV9/ATA/HddCreate.h
 	DEV9/DEV9.h

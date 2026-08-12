@@ -1,11 +1,14 @@
 package com.sbro.emucorex.ui.emulation
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sbro.emucorex.EmuCoreXApp
+import com.sbro.emucorex.discord.DiscordIntegration
 import com.sbro.emucorex.core.AndroidGamePerformance
 import com.sbro.emucorex.core.AndroidGamePhase
 import com.sbro.emucorex.core.AppAnalytics
@@ -14,6 +17,7 @@ import com.sbro.emucorex.core.BiosValidator
 import com.sbro.emucorex.core.DocumentPathResolver
 import com.sbro.emucorex.core.EmulatorBridge
 import com.sbro.emucorex.core.RendererDefaults
+import com.sbro.emucorex.core.SetupValidator
 import com.sbro.emucorex.core.EmulatorStorage
 import com.sbro.emucorex.core.GamepadManager
 import com.sbro.emucorex.core.GpuDriverManager
@@ -29,6 +33,7 @@ import com.sbro.emucorex.data.AppPreferences
 import com.sbro.emucorex.data.AppPreferences.Companion.FPS_OVERLAY_MODE_SIMPLE
 import com.sbro.emucorex.data.AppPreferences.Companion.FPS_OVERLAY_MODE_DETAILED
 import com.sbro.emucorex.data.CheatBlock
+import com.sbro.emucorex.data.DisplayCrop
 import com.sbro.emucorex.data.OverlayControlLayout
 import com.sbro.emucorex.data.CheatRepository
 import com.sbro.emucorex.data.GameRepository
@@ -36,6 +41,7 @@ import com.sbro.emucorex.data.MemoryCardRepository
 import com.sbro.emucorex.data.OverlayLayoutSnapshot
 import com.sbro.emucorex.data.PerGameSettings
 import com.sbro.emucorex.data.PerGameSettingsRepository
+import com.sbro.emucorex.data.resolveShaderChain
 import com.sbro.emucorex.data.TouchControlsLayoutProfile
 import com.sbro.emucorex.data.PER_GAME_TOUCH_CONTROLS_LAYOUT_KEY
 import com.sbro.emucorex.data.saveTouchControlsLayout
@@ -178,6 +184,8 @@ data class EmulationUiState(
     val renderer: Int = RendererDefaults.defaultForHardware(),
     val upscale: Float = 1f,
     val aspectRatio: Int = 1,
+    val localMultiplayerMode: Int = AppPreferences.LOCAL_MULTIPLAYER_OFF,
+    val displayCrop: DisplayCrop = DisplayCrop.None,
     val performancePreset: Int = PerformancePresets.CUSTOM,
     val enableInstantVu1: Boolean = true,
     val enableMtvu: Boolean = true,
@@ -274,6 +282,8 @@ private data class EmulationLaunchConfig(
     val gpuHardwareProfile: Int,
     val mediatekAngleOpenGl: Boolean,
     val aspectRatio: Int,
+    val localMultiplayerMode: Int,
+    val displayCrop: DisplayCrop,
     val audioVolume: Int,
     val audioFastForwardVolume: Int,
     val audioMuted: Boolean,
@@ -321,6 +331,8 @@ private data class EmulationLaunchConfig(
     val trilinearFiltering: Int,
     val blendingAccuracy: Int,
     val texturePreloading: Int,
+    val shaderChainEnabled: Boolean,
+    val shaderChainPreset: String,
     val enableFxaa: Boolean,
     val casMode: Int,
     val sgsrMode: Int,
@@ -391,6 +403,8 @@ private data class LiveRuntimeSnapshot(
     val renderer: Int,
     val upscale: Float,
     val aspectRatio: Int,
+    val localMultiplayerMode: Int,
+    val displayCrop: DisplayCrop,
     val performancePreset: Int,
     val enableInstantVu1: Boolean,
     val enableMtvu: Boolean,
@@ -860,6 +874,16 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             preferences.aspectRatio.collect { value ->
                 applyGlobalRuntimePreferenceUpdate { it.copy(aspectRatio = value) }
+            }
+        }
+        viewModelScope.launch {
+            preferences.localMultiplayerMode.collect { value ->
+                applyGlobalRuntimePreferenceUpdate { it.copy(localMultiplayerMode = value) }
+            }
+        }
+        viewModelScope.launch {
+            preferences.displayCrop.collect { value ->
+                applyGlobalRuntimePreferenceUpdate { it.copy(displayCrop = value) }
             }
         }
         viewModelScope.launch {
@@ -1523,6 +1547,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                     gpuHardwareProfile = config.gpuHardwareProfile,
                     mediatekAngleOpenGl = config.mediatekAngleOpenGl,
                     aspectRatio = config.aspectRatio,
+                    localMultiplayerMode = config.localMultiplayerMode,
+                    displayCrop = config.displayCrop,
                     audioVolume = config.audioVolume,
                     audioFastForwardVolume = config.audioFastForwardVolume,
                     audioMuted = config.audioMuted,
@@ -1570,6 +1596,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                     trilinearFiltering = config.trilinearFiltering,
                     blendingAccuracy = config.blendingAccuracy,
                     texturePreloading = config.texturePreloading,
+                    shaderChainEnabled = config.shaderChainEnabled,
+                    shaderChainPreset = config.shaderChainPreset,
                     enableFxaa = config.enableFxaa,
                     casMode = config.casMode,
                     sgsrMode = config.sgsrMode,
@@ -1722,6 +1750,12 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                         gameSettingsProfileActive = existingProfile != null
                     )
                     syncCurrentGameProfileMetadata()
+                    if (!bootSmokeProbe) {
+                        DiscordIntegration.setPlaying(
+                            title = currentGameTitle,
+                            serial = currentGameSerial.takeIf { it.isNotBlank() }
+                        )
+                    }
                 }
                 updateCrashContext(
                     launchState = "starting",
@@ -1755,6 +1789,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                     renderer = liveRuntime.renderer,
                     upscale = liveRuntime.upscale,
                     aspectRatio = liveRuntime.aspectRatio,
+                    localMultiplayerMode = liveRuntime.localMultiplayerMode,
+                    displayCrop = liveRuntime.displayCrop,
                     performancePreset = liveRuntime.performancePreset,
                     enableInstantVu1 = liveRuntime.enableInstantVu1,
                     enableMtvu = liveRuntime.enableMtvu,
@@ -2059,6 +2095,7 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
             isPaused = !isPaused,
             showMenu = if (isPaused) false else _uiState.value.showMenu
         )
+        DiscordIntegration.setPaused(!isPaused)
         updateCrashContext(launchState = if (!isPaused) "paused" else "running")
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -2078,6 +2115,7 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
             EmulatorBridge.resetKeyStatus()
             refreshSaveStateMetadata()
             _uiState.value = _uiState.value.copy(showMenu = true, isPaused = true)
+            DiscordIntegration.setPaused(true)
             updateCrashContext(launchState = "paused")
             viewModelScope.launch(Dispatchers.IO) {
                 try {
@@ -2089,9 +2127,69 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun swapDisc(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val context = getApplication<Application>()
+            val displayName = DocumentPathResolver.getDisplayName(context, uri.toString())
+            val readable = runCatching {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+                    descriptor.statSize != 0L
+                } ?: false
+            }.getOrDefault(false)
+
+            if (!SetupValidator.isSupportedDiscImageName(displayName) || !readable) {
+                _uiState.value = _uiState.value.copy(toastMessage = "disc_swap_invalid")
+                delay(2500.milliseconds)
+                if (_uiState.value.toastMessage == "disc_swap_invalid") {
+                    _uiState.value = _uiState.value.copy(toastMessage = null)
+                }
+                return@launch
+            }
+
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+
+            _uiState.value = _uiState.value.copy(
+                isActionInProgress = true,
+                actionLabel = "swapping_disc"
+            )
+            val success = lifecycleMutex.withLock {
+                if (isShuttingDown || !_uiState.value.isRunning) {
+                    false
+                } else {
+                    EmulatorBridge.changeDisc(uri.toString())
+                }
+            }
+
+            // VMManager restores the old image when opening the selected image fails.
+            // Either way the tray cycle must continue, so close the menu and resume.
+            runCatching { EmulatorBridge.resume() }
+            pausedForBackground = false
+            _uiState.value = _uiState.value.copy(
+                isPaused = false,
+                showMenu = false,
+                isActionInProgress = false,
+                actionLabel = null,
+                toastMessage = if (success) "disc_swap_success" else "disc_swap_failed"
+            )
+            DiscordIntegration.setPaused(false)
+            updateCrashContext(launchState = "running")
+            delay(3000.milliseconds)
+            val expectedToast = if (success) "disc_swap_success" else "disc_swap_failed"
+            if (_uiState.value.toastMessage == expectedToast) {
+                _uiState.value = _uiState.value.copy(toastMessage = null)
+            }
+        }
+    }
+
     private fun closeMenu() {
         pausedForBackground = false
         _uiState.value = _uiState.value.copy(showMenu = false, isPaused = false)
+        DiscordIntegration.setPaused(false)
         updateCrashContext(launchState = "running")
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -2472,6 +2570,31 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                 preferences.setEnableMtvu(effectiveEnabled)
             }
             EmulatorBridge.setSetting("EmuCore/Speedhacks", "vuThread", "bool", effectiveEnabled.toString())
+            updateCrashContext()
+        }
+    }
+
+    fun setLocalMultiplayerMode(value: Int) {
+        viewModelScope.launch {
+            val normalized = value.coerceIn(
+                AppPreferences.LOCAL_MULTIPLAYER_OFF,
+                AppPreferences.LOCAL_MULTIPLAYER_HORIZONTAL_CROP_SWAPPED
+            )
+            persistRuntimeState(_uiState.value.copy(localMultiplayerMode = normalized)) {
+                preferences.setLocalMultiplayerMode(normalized)
+            }
+            EmulatorBridge.setLocalMultiplayerMode(normalized)
+            updateCrashContext()
+        }
+    }
+
+    fun setDisplayCrop(value: DisplayCrop) {
+        viewModelScope.launch {
+            val crop = value.sanitized()
+            persistRuntimeState(_uiState.value.copy(displayCrop = crop)) {
+                preferences.setDisplayCrop(crop)
+            }
+            EmulatorBridge.setDisplayCrop(crop)
             updateCrashContext()
         }
     }
@@ -3521,6 +3644,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                     gpuDriverType = existingProfile?.gpuDriverType ?: runtimeProfile.gpuDriverType,
                     customDriverPath = existingProfile?.customDriverPath ?: runtimeProfile.customDriverPath,
                     mediatekAngleOpenGl = existingProfile?.mediatekAngleOpenGl ?: runtimeProfile.mediatekAngleOpenGl,
+                    shaderChainOverrideEnabled = existingProfile?.shaderChainOverrideEnabled,
+                    shaderChainPreset = existingProfile?.shaderChainPreset.orEmpty(),
                     providedKeys = providedKeys
                 )
             )
@@ -3601,6 +3726,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
             gpuHardwareProfile = settings.gpuHardwareProfile,
             mediatekAngleOpenGl = settings.mediatekAngleOpenGl,
             aspectRatio = settings.aspectRatio,
+            localMultiplayerMode = settings.localMultiplayerMode,
+            displayCrop = settings.displayCrop,
             audioVolume = settings.audioVolume,
             audioFastForwardVolume = settings.audioFastForwardVolume,
             audioMuted = settings.audioMuted,
@@ -3648,6 +3775,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
             trilinearFiltering = settings.trilinearFiltering,
             blendingAccuracy = settings.blendingAccuracy,
             texturePreloading = settings.texturePreloading,
+            shaderChainEnabled = settings.shaderChainEnabled,
+            shaderChainPreset = settings.shaderChainPreset,
             enableFxaa = settings.enableFxaa,
             casMode = settings.casMode,
             sgsrMode = settings.sgsrMode,
@@ -3731,6 +3860,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
             renderer = settings.renderer,
             upscale = settings.upscaleMultiplier,
             aspectRatio = settings.aspectRatio,
+            localMultiplayerMode = settings.localMultiplayerMode,
+            displayCrop = settings.displayCrop,
             performancePreset = settings.performancePreset,
             enableInstantVu1 = settings.enableInstantVu1,
             enableMtvu = settings.enableMtvu,
@@ -3824,6 +3955,10 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun EmulationLaunchConfig.applyProfile(profile: PerGameSettings?): EmulationLaunchConfig {
         if (profile == null) return this
+        val resolvedShaderChain = profile.resolveShaderChain(
+            globalEnabled = shaderChainEnabled,
+            globalPreset = shaderChainPreset
+        )
         fun <T> pick(key: String, current: T, value: PerGameSettings.() -> T): T {
             val keys = profile.providedKeys
             return if (keys == null || key in keys) profile.value() else current
@@ -3835,6 +3970,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
             mediatekAngleOpenGl = pick("mediatekAngleOpenGl", mediatekAngleOpenGl) { mediatekAngleOpenGl },
             upscaleMultiplier = pick("upscaleMultiplier", upscaleMultiplier) { upscaleMultiplier },
             aspectRatio = pick("aspectRatio", aspectRatio) { aspectRatio },
+            localMultiplayerMode = pick("localMultiplayerMode", localMultiplayerMode) { localMultiplayerMode },
+            displayCrop = pick("displayCrop", displayCrop) { displayCrop },
             instantVu1 = pick("enableInstantVu1", instantVu1) { enableInstantVu1 },
             mtvu = pick("enableMtvu", mtvu) { enableMtvu },
             enableThreadPinning = pick("enableThreadPinning", enableThreadPinning) { enableThreadPinning },
@@ -3862,6 +3999,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
             trilinearFiltering = pick("trilinearFiltering", trilinearFiltering) { trilinearFiltering },
             blendingAccuracy = pick("blendingAccuracy", blendingAccuracy) { blendingAccuracy },
             texturePreloading = pick("texturePreloading", texturePreloading) { texturePreloading },
+            shaderChainEnabled = resolvedShaderChain.enabled,
+            shaderChainPreset = resolvedShaderChain.preset,
             enableFxaa = pick("enableFxaa", enableFxaa) { enableFxaa },
             casMode = pick("casMode", casMode) { casMode },
             sgsrMode = pick("sgsrMode", sgsrMode) { sgsrMode },
@@ -3948,6 +4087,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
             renderer = pick("renderer", renderer) { renderer },
             upscale = pick("upscaleMultiplier", upscale) { upscaleMultiplier },
             aspectRatio = pick("aspectRatio", aspectRatio) { aspectRatio },
+            localMultiplayerMode = pick("localMultiplayerMode", localMultiplayerMode) { localMultiplayerMode },
+            displayCrop = pick("displayCrop", displayCrop) { displayCrop },
             enableInstantVu1 = pick("enableInstantVu1", enableInstantVu1) { enableInstantVu1 },
             enableMtvu = pick("enableMtvu", enableMtvu) { enableMtvu },
             enableThreadPinning = pick("enableThreadPinning", enableThreadPinning) { enableThreadPinning },
@@ -4064,6 +4205,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
             renderer = renderer,
             upscaleMultiplier = upscale,
             aspectRatio = aspectRatio,
+            localMultiplayerMode = localMultiplayerMode,
+            displayCrop = displayCrop,
             showFps = showFps,
             fpsOverlayMode = fpsOverlayMode,
             enableInstantVu1 = enableInstantVu1,
@@ -4157,6 +4300,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
             if (renderer != preferences.renderer.first()) add("renderer")
             if (upscale != preferences.upscaleMultiplier.first()) add("upscaleMultiplier")
             if (aspectRatio != preferences.aspectRatio.first()) add("aspectRatio")
+            if (localMultiplayerMode != preferences.localMultiplayerMode.first()) add("localMultiplayerMode")
+            if (displayCrop != preferences.displayCrop.first()) add("displayCrop")
             if (showFps != globalShowFps) add("showFps")
             if (fpsOverlayMode != globalFpsOverlayMode) add("fpsOverlayMode")
             if (enableInstantVu1 != globalEnableInstantVu1) add("enableInstantVu1")
@@ -4572,6 +4717,7 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                     EmulatorBridge.pause()
                     pausedForBackground = true
                     _uiState.value = state.copy(isPaused = true)
+                    DiscordIntegration.setPaused(true)
                     syncPendingPlayTime(forceCloud = false)
                     updateCrashContext(launchState = "paused")
                 } catch (_: Exception) { }
@@ -4596,6 +4742,7 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                     EmulatorBridge.resume()
                     pausedForBackground = false
                     _uiState.value = state.copy(isPaused = false)
+                    DiscordIntegration.setPaused(false)
                     updateCrashContext(launchState = "running")
                 } catch (_: Exception) { }
             }
@@ -4689,6 +4836,11 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
         })
         NativeApp.setCrashContextString("emu_upscale", state.upscale.toString())
         NativeApp.setCrashContextInt("emu_aspect_ratio", state.aspectRatio)
+        NativeApp.setCrashContextInt("emu_local_multiplayer_mode", state.localMultiplayerMode)
+        NativeApp.setCrashContextInt("emu_crop_left", state.displayCrop.left)
+        NativeApp.setCrashContextInt("emu_crop_top", state.displayCrop.top)
+        NativeApp.setCrashContextInt("emu_crop_right", state.displayCrop.right)
+        NativeApp.setCrashContextInt("emu_crop_bottom", state.displayCrop.bottom)
         NativeApp.setCrashContextBool("emu_mtvu", state.enableMtvu)
         NativeApp.setCrashContextBool("emu_thread_pinning", state.enableThreadPinning)
         NativeApp.setCrashContextBool("emu_fast_cdvd", state.enableFastCdvd)
@@ -4706,6 +4858,7 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun clearCrashContext() {
+        DiscordIntegration.clearGame()
         currentGameTitle = ""
         currentGamePath = null
         currentTouchControlsLayoutProfile = null
@@ -4734,6 +4887,7 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     override fun onCleared() {
+        DiscordIntegration.clearGame()
         androidGamePerformance.update(AndroidGamePhase.Idle)
         NativeApp.setPerformanceMetricsEnabled(visible = false, detailed = false, gpuTiming = false)
         fastForwardRequested = false

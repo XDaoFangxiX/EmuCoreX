@@ -8,6 +8,8 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -60,6 +62,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Gamepad
 import androidx.compose.material.icons.rounded.LockOpen
@@ -74,7 +77,6 @@ import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import com.sbro.emucorex.ui.common.AppAlertDialog as AlertDialog
-import com.sbro.emucorex.ui.common.CompactAppAlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -152,6 +154,7 @@ import com.sbro.emucorex.core.AndroidTouchHaptics
 import com.sbro.emucorex.core.AndroidGyroscopeInput
 import com.sbro.emucorex.core.AndroidTouchHaptics.ButtonPhase
 import com.sbro.emucorex.core.EmulatorBridge
+import com.sbro.emucorex.core.NativeApp
 import com.sbro.emucorex.core.GamepadManager
 import com.sbro.emucorex.core.LocalTvUiEnvironment
 import com.sbro.emucorex.core.buildUpscaleOptions
@@ -161,6 +164,7 @@ import com.sbro.emucorex.core.utils.RetroAchievementsLiveStateManager
 import com.sbro.emucorex.data.AppPreferences
 import com.sbro.emucorex.data.AppPreferences.Companion.FPS_OVERLAY_MODE_DETAILED
 import com.sbro.emucorex.data.AppPreferences.Companion.FPS_OVERLAY_MODE_SIMPLE
+import com.sbro.emucorex.data.DisplayCrop
 import com.sbro.emucorex.data.OverlayControlLayout
 import com.sbro.emucorex.data.OverlayLayoutSnapshot
 import com.sbro.emucorex.data.PerformanceOverlayMetrics
@@ -179,6 +183,7 @@ import com.sbro.emucorex.data.gameMenuSectionsForTab
 import com.sbro.emucorex.ui.controls.CustomControlVisual
 import com.sbro.emucorex.ui.controls.composeShape
 import com.sbro.emucorex.ui.common.BitmapPathImage
+import com.sbro.emucorex.ui.common.EmulationSideArtworkOverlay
 import com.sbro.emucorex.ui.common.ProvideGamepadMenuAction
 import com.sbro.emucorex.ui.common.ProvideGamepadShoulderActions
 import com.sbro.emucorex.ui.common.ProvideGamepadUiNavigation
@@ -204,6 +209,14 @@ import java.text.DateFormat
 import java.util.Date
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
+
+private val DISC_SWAP_MIME_TYPES = arrayOf(
+    "application/octet-stream",
+    "application/x-iso9660-image",
+    "application/x-cd-image",
+    "application/x-chd",
+    "application/gzip"
+)
 
 private object PadKey {
     const val UP = 19
@@ -414,6 +427,14 @@ fun EmulationScreen(
     }
     val gamepadActions = remember { GamepadManager.mappableButtonActions() }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(uiState.localMultiplayerMode) {
+        EmulatorBridge.setLocalMultiplayerMode(uiState.localMultiplayerMode)
+    }
+    val swapDiscPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let(viewModel::swapDisc)
+    }
     val rootCutoutPadding = WindowInsets.displayCutout.asPaddingValues()
     val rootNavPadding = WindowInsets.navigationBars.asPaddingValues()
     val overlayLeftSafeInset = maxOf(
@@ -842,6 +863,19 @@ fun EmulationScreen(
         }
     }
 
+    val nativeDisplayDrawRect by produceState<FloatArray?>(
+        initialValue = null,
+        key1 = uiState.isRunning
+    ) {
+        if (!uiState.isRunning) return@produceState
+        while (true) {
+            value = runCatching { NativeApp.getDisplayDrawRect() }
+                .getOrNull()
+                ?.takeIf { it.size >= 4 && it[2] > it[0] && it[3] > it[1] }
+            delay(250.milliseconds)
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         // Game surface
         AndroidView(
@@ -893,6 +927,25 @@ fun EmulationScreen(
                     }
                     false
                 }
+        )
+
+        // SurfaceView can retain the previous game's final buffer across a fast restart.
+        // Keep it covered until the new renderer publishes its first authoritative draw rect.
+        if (nativeDisplayDrawRect == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            )
+        }
+
+        EmulationSideArtworkOverlay(
+            artwork = globalDefaults.emulationSideArtwork,
+            revision = globalDefaults.emulationSideArtworkRevision,
+            aspectRatioMode = uiState.aspectRatio,
+            nativeDrawRect = nativeDisplayDrawRect,
+            modifier = Modifier.fillMaxSize(),
+            dimPercent = globalDefaults.emulationSideArtworkDim
         )
 
         if (!showControlsEditor) {
@@ -975,6 +1028,7 @@ fun EmulationScreen(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 48.dp, start = overlayHorizontalSafeInset, end = overlayHorizontalSafeInset)
+                .zIndex(40f)
         ) {
             val message = when (uiState.toastMessage) {
                 "saved" -> stringResource(R.string.emulation_saved)
@@ -984,6 +1038,9 @@ fun EmulationScreen(
                 "bios_missing" -> stringResource(R.string.emulation_bios_missing)
                 "launch_failed" -> stringResource(R.string.emulation_launch_failed)
                 "launch_path_error" -> stringResource(R.string.emulation_launch_path_error)
+                "disc_swap_success" -> stringResource(R.string.emulation_swap_disc_success)
+                "disc_swap_failed" -> stringResource(R.string.emulation_swap_disc_failed)
+                "disc_swap_invalid" -> stringResource(R.string.emulation_swap_disc_invalid)
                 else -> ""
             }
             Box(
@@ -1194,7 +1251,8 @@ fun EmulationScreen(
         if (shouldShowOverlay && !uiState.showMenu && !showControlsEditor) {
             val scaleFactor = uiState.overlayScale / 100f
             val alpha = uiState.overlayOpacity / 100f
-            OnScreenControls(
+            if (uiState.localMultiplayerMode == AppPreferences.LOCAL_MULTIPLAYER_OFF) {
+                OnScreenControls(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(20f)
@@ -1231,7 +1289,21 @@ fun EmulationScreen(
                 onPadInput = { keyCode, range, pressed ->
                     viewModel.onPadInput(overlayPadIndex, keyCode, range, pressed)
                 }
-            )
+                )
+            } else {
+                LocalMultiplayerTouchControls(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(20f),
+                    mode = uiState.localMultiplayerMode,
+                    uiState = uiState,
+                    scaleFactor = scaleFactor,
+                    alpha = alpha,
+                    onToggleLeftInputMode = viewModel::toggleLeftInputMode,
+                    onFastForwardHoldChange = viewModel::setFastForwardHeld,
+                    onPadInput = viewModel::onPadInput
+                )
+            }
         }
         }
 
@@ -1285,6 +1357,7 @@ fun EmulationScreen(
                     overlayDefaults = overlayDefaults,
                     onClose = toggleMenuClick,
                     onPauseToggle = togglePauseClick,
+                    onSwapDisc = { swapDiscPicker.launch(DISC_SWAP_MIME_TYPES) },
                     onQuickSave = requestQuickSaveClick,
                     onQuickLoad = requestQuickLoadClick,
                     onLoadAutoSave = requestAutoSaveLoadClick,
@@ -1324,6 +1397,8 @@ fun EmulationScreen(
                     onSetRenderer = { viewModel.setRenderer(it) },
                     onSetUpscale = { viewModel.setUpscale(it) },
                     onSetAspectRatio = { viewModel.setAspectRatio(it) },
+                    onSetDisplayCrop = { viewModel.setDisplayCrop(it) },
+                    onSetLocalMultiplayerMode = viewModel::setLocalMultiplayerMode,
                     onSetMtvu = { viewModel.setMtvu(it) },
                     onSetThreadPinning = { viewModel.setThreadPinning(it) },
                     onSetFastCdvd = { viewModel.setFastCdvd(it) },
@@ -1393,19 +1468,24 @@ fun EmulationScreen(
     }
 
     if (showExitDialog) {
-        CompactAppAlertDialog(
+        AlertDialog(
             onDismissRequest = dismissExitClick,
-            containerColor = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(24.dp),
+            icon = {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
             title = {
                 Text(
-                    stringResource(R.string.emulation_exit_confirm),
+                    text = stringResource(R.string.emulation_exit_confirm),
                     style = MaterialTheme.typography.titleLarge
                 )
             },
             text = {
                 Text(
-                    stringResource(R.string.emulation_exit_confirm_desc),
+                    text = stringResource(R.string.emulation_exit_confirm_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1413,7 +1493,7 @@ fun EmulationScreen(
             confirmButton = {
                 TextButton(onClick = confirmExitClick) {
                     Text(
-                        stringResource(R.string.yes),
+                        text = stringResource(R.string.yes),
                         color = MaterialTheme.colorScheme.error
                     )
                 }
@@ -1781,6 +1861,154 @@ private fun TransportStatusOverlay(mode: EmulationTransportMode) {
     }
 }
 
+@Composable
+private fun LocalMultiplayerTouchControls(
+    modifier: Modifier,
+    mode: Int,
+    uiState: EmulationUiState,
+    scaleFactor: Float,
+    alpha: Float,
+    onToggleLeftInputMode: () -> Unit,
+    onFastForwardHoldChange: (Boolean) -> Unit,
+    onPadInput: (Int, Int, Int, Boolean) -> Unit
+) {
+    val sideBySide = mode == AppPreferences.LOCAL_MULTIPLAYER_SIDE_BY_SIDE
+    val (firstPad, secondPad) = localMultiplayerPadOrder(mode)
+
+    if (sideBySide) {
+        Row(modifier = modifier) {
+            LocalMultiplayerTouchZone(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                padIndex = firstPad,
+                uiState = uiState,
+                scaleFactor = scaleFactor * 0.58f,
+                alpha = alpha,
+                onToggleLeftInputMode = onToggleLeftInputMode,
+                onFastForwardHoldChange = onFastForwardHoldChange,
+                onPadInput = onPadInput
+            )
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .background(Color.White.copy(alpha = 0.16f))
+            )
+            LocalMultiplayerTouchZone(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                padIndex = secondPad,
+                uiState = uiState,
+                scaleFactor = scaleFactor * 0.58f,
+                alpha = alpha,
+                onToggleLeftInputMode = onToggleLeftInputMode,
+                onFastForwardHoldChange = {},
+                onPadInput = onPadInput
+            )
+        }
+    } else {
+        Column(modifier = modifier) {
+            LocalMultiplayerTouchZone(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                padIndex = firstPad,
+                uiState = uiState,
+                scaleFactor = scaleFactor * 0.50f,
+                alpha = alpha,
+                onToggleLeftInputMode = onToggleLeftInputMode,
+                onFastForwardHoldChange = onFastForwardHoldChange,
+                onPadInput = onPadInput
+            )
+            HorizontalDivider(color = Color.White.copy(alpha = 0.16f))
+            LocalMultiplayerTouchZone(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                padIndex = secondPad,
+                uiState = uiState,
+                scaleFactor = scaleFactor * 0.50f,
+                alpha = alpha,
+                onToggleLeftInputMode = onToggleLeftInputMode,
+                onFastForwardHoldChange = {},
+                onPadInput = onPadInput
+            )
+        }
+    }
+}
+
+internal fun localMultiplayerPadOrder(mode: Int): Pair<Int, Int> {
+    return if (mode == AppPreferences.LOCAL_MULTIPLAYER_HORIZONTAL_CROP_SWAPPED) {
+        1 to 0
+    } else {
+        0 to 1
+    }
+}
+
+@Composable
+private fun LocalMultiplayerTouchZone(
+    modifier: Modifier,
+    padIndex: Int,
+    uiState: EmulationUiState,
+    scaleFactor: Float,
+    alpha: Float,
+    onToggleLeftInputMode: () -> Unit,
+    onFastForwardHoldChange: (Boolean) -> Unit,
+    onPadInput: (Int, Int, Int, Boolean) -> Unit
+) {
+    Box(modifier = modifier) {
+        OnScreenControls(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(alpha = alpha),
+            scaleFactor = scaleFactor,
+            stickScaleFactor = uiState.stickScale / 100f,
+            leftStickSensitivity = uiState.leftStickSensitivity / 100f,
+            rightStickSensitivity = uiState.rightStickSensitivity / 100f,
+            invertLeftStick = uiState.invertLeftStick,
+            invertRightStick = uiState.invertRightStick,
+            invertLeftStickHorizontal = uiState.invertLeftStickHorizontal,
+            invertRightStickHorizontal = uiState.invertRightStickHorizontal,
+            rightStickUpToR2 = uiState.gamepadRightStickUpToR2,
+            rightStickDownToL2 = uiState.gamepadRightStickDownToL2,
+            touchscreenRightStick = uiState.touchscreenRightStick,
+            touchscreenRightStickSensitivity = uiState.touchscreenRightStickSensitivity / 100f,
+            touchHaptics = uiState.touchHaptics,
+            touchHapticsPreset = uiState.touchHapticsPreset,
+            touchHapticsStrength = uiState.touchHapticsStrength,
+            visualStyle = uiState.touchControlVisualStyle,
+            pressEffect = uiState.touchControlPressEffect,
+            customControls = uiState.customTouchControls.controls,
+            dpadOffset = uiState.dpadOffset,
+            lstickOffset = uiState.lstickOffset,
+            rstickOffset = uiState.rstickOffset,
+            actionOffset = uiState.actionOffset,
+            lbtnOffset = uiState.lbtnOffset,
+            rbtnOffset = uiState.rbtnOffset,
+            centerOffset = uiState.centerOffset,
+            controlLayouts = uiState.controlLayouts,
+            racingMode = uiState.racingMode,
+            onToggleLeftInputMode = onToggleLeftInputMode,
+            onFastForwardHoldChange = onFastForwardHoldChange,
+            onPadInput = { key, range, pressed -> onPadInput(padIndex, key, range, pressed) },
+            respectSystemInsets = false
+        )
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+                .zIndex(30f),
+            shape = RoundedCornerShape(999.dp),
+            color = Color.Black.copy(alpha = 0.56f),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.20f))
+        ) {
+            Text(
+                text = stringResource(
+                    if (padIndex == 0) R.string.settings_gamepad_player_1
+                    else R.string.settings_gamepad_player_2
+                ),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = Color.White
+            )
+        }
+    }
+}
+
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 private fun OnScreenControls(
@@ -1814,14 +2042,19 @@ private fun OnScreenControls(
     racingMode: Boolean,
     onToggleLeftInputMode: () -> Unit,
     onFastForwardHoldChange: (Boolean) -> Unit,
-    onPadInput: (Int, Int, Boolean) -> Unit
+    onPadInput: (Int, Int, Boolean) -> Unit,
+    respectSystemInsets: Boolean = true
 ) {
     val density = LocalDensity.current
     val safeDrawingPadding = WindowInsets.safeDrawing.asPaddingValues()
-    val safeLeft = safeDrawingPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
-    val safeRight = safeDrawingPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
-    val safeTop = safeDrawingPadding.calculateTopPadding()
-    val safeBottom = safeDrawingPadding.calculateBottomPadding()
+    val safeLeft = if (respectSystemInsets) {
+        safeDrawingPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
+    } else 0.dp
+    val safeRight = if (respectSystemInsets) {
+        safeDrawingPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
+    } else 0.dp
+    val safeTop = if (respectSystemInsets) safeDrawingPadding.calculateTopPadding() else 0.dp
+    val safeBottom = if (respectSystemInsets) safeDrawingPadding.calculateBottomPadding() else 0.dp
     val context = LocalContext.current
     val hapticView = LocalView.current
     val currentOnPadInput by rememberUpdatedState(onPadInput)
@@ -2577,6 +2810,7 @@ private fun EmulationSidebarMenu(
     overlayDefaults: OverlayLayoutSnapshot,
     onClose: () -> Unit,
     onPauseToggle: () -> Unit,
+    onSwapDisc: () -> Unit,
     onQuickSave: () -> Unit,
     onQuickLoad: () -> Unit,
     onLoadAutoSave: () -> Unit,
@@ -2616,6 +2850,8 @@ private fun EmulationSidebarMenu(
     onSetRenderer: (Int) -> Unit,
     onSetUpscale: (Float) -> Unit,
     onSetAspectRatio: (Int) -> Unit,
+    onSetDisplayCrop: (DisplayCrop) -> Unit,
+    onSetLocalMultiplayerMode: (Int) -> Unit,
     onSetMtvu: (Boolean) -> Unit,
     onSetThreadPinning: (Boolean) -> Unit,
     onSetFastCdvd: (Boolean) -> Unit,
@@ -2833,6 +3069,15 @@ private fun EmulationSidebarMenu(
                                 )
                             }
                         }
+
+                        MenuButton(
+                            icon = Icons.Rounded.Album,
+                            text = stringResource(R.string.emulation_swap_disc),
+                            onClick = onSwapDisc,
+                            enabled = !uiState.isActionInProgress,
+                            showProgress = uiState.actionLabel == "swapping_disc",
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f)
+                        )
 
                         val visibleSessionSections = gameMenuSectionsForTab(
                             GameMenuTabId.SESSION,
@@ -3671,6 +3916,84 @@ private fun EmulationSidebarMenu(
                             helpText = stringResource(R.string.settings_help_aspect_ratio),
                             onResetToDefault = { onSetAspectRatio(globalDefaults.aspectRatio) }
                         )
+
+                        LiveSelectionRow(
+                            title = stringResource(R.string.emulation_local_multiplayer_title),
+                            options = listOf(
+                                LiveSelectionOption(
+                                    AppPreferences.LOCAL_MULTIPLAYER_OFF,
+                                    stringResource(R.string.emulation_local_multiplayer_off)
+                                ),
+                                LiveSelectionOption(
+                                    AppPreferences.LOCAL_MULTIPLAYER_SIDE_BY_SIDE,
+                                    stringResource(R.string.emulation_local_multiplayer_side_by_side)
+                                ),
+                                LiveSelectionOption(
+                                    AppPreferences.LOCAL_MULTIPLAYER_STACKED,
+                                    stringResource(R.string.emulation_local_multiplayer_stacked)
+                                ),
+                                LiveSelectionOption(
+                                    AppPreferences.LOCAL_MULTIPLAYER_HORIZONTAL_CROP,
+                                    stringResource(R.string.emulation_local_multiplayer_crop)
+                                ),
+                                LiveSelectionOption(
+                                    AppPreferences.LOCAL_MULTIPLAYER_HORIZONTAL_CROP_SWAPPED,
+                                    stringResource(R.string.emulation_local_multiplayer_crop_swapped)
+                                )
+                            ),
+                            currentValue = uiState.localMultiplayerMode,
+                            onValueChange = onSetLocalMultiplayerMode,
+                            allowWrap = false,
+                            horizontalScrolling = true,
+                            helpText = stringResource(R.string.emulation_local_multiplayer_help),
+                            onResetToDefault = {
+                                onSetLocalMultiplayerMode(AppPreferences.LOCAL_MULTIPLAYER_OFF)
+                            }
+                        )
+
+                        val crop = uiState.displayCrop
+                        val cropPreset = when (crop) {
+                            DisplayCrop.None -> 0
+                            DisplayCrop.ThinEdges -> 2
+                            DisplayCrop.SafeEdges -> 4
+                            else -> -1
+                        }
+                        LiveChipsSelectionRow(
+                            title = stringResource(R.string.settings_display_crop),
+                            options = listOf(
+                                0 to stringResource(R.string.settings_display_crop_off),
+                                2 to stringResource(R.string.settings_display_crop_thin),
+                                4 to stringResource(R.string.settings_display_crop_safe),
+                                -1 to stringResource(R.string.settings_display_crop_custom)
+                            ),
+                            currentValue = cropPreset,
+                            onValueChange = { preset ->
+                                when (preset) {
+                                    0 -> onSetDisplayCrop(DisplayCrop.None)
+                                    2 -> onSetDisplayCrop(DisplayCrop.ThinEdges)
+                                    4 -> onSetDisplayCrop(DisplayCrop.SafeEdges)
+                                }
+                            },
+                            helpText = stringResource(R.string.settings_help_display_crop),
+                            onResetToDefault = { onSetDisplayCrop(globalDefaults.displayCrop) }
+                        )
+                        val pixelsUnit = stringResource(R.string.settings_display_crop_pixels_unit)
+                        listOf(
+                            Triple(R.string.settings_display_crop_left, crop.left) { value: Int -> crop.copy(left = value) },
+                            Triple(R.string.settings_display_crop_top, crop.top) { value: Int -> crop.copy(top = value) },
+                            Triple(R.string.settings_display_crop_right, crop.right) { value: Int -> crop.copy(right = value) },
+                            Triple(R.string.settings_display_crop_bottom, crop.bottom) { value: Int -> crop.copy(bottom = value) }
+                        ).forEach { (titleRes, pixels, update) ->
+                            LiveSliderRow(
+                                title = stringResource(titleRes),
+                                valueLabelForValue = { "$it $pixelsUnit" },
+                                value = pixels.toFloat(),
+                                range = DisplayCrop.MIN_PIXELS.toFloat()..DisplayCrop.MAX_PIXELS.toFloat(),
+                                steps = DisplayCrop.MAX_PIXELS - DisplayCrop.MIN_PIXELS - 1,
+                                onValueChange = { onSetDisplayCrop(update(it.roundToInt())) },
+                                onResetToDefault = { onSetDisplayCrop(update(0)) }
+                            )
+                        }
 
                                     }
 
@@ -5386,6 +5709,7 @@ private fun LiveSelectionRow(
     currentValue: Int,
     onValueChange: (Int) -> Unit,
     allowWrap: Boolean = true,
+    horizontalScrolling: Boolean = false,
     helpText: String? = null,
     onResetToDefault: (() -> Unit)? = null
 ) {
@@ -5427,6 +5751,22 @@ private fun LiveSelectionRow(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 options.forEach { option ->
+                    LiveSelectionChip(
+                        option = option,
+                        selected = option.value == currentValue,
+                        onClick = { onValueChange(option.value) }
+                    )
+                }
+            }
+        } else if (horizontalScrolling) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalViewportBleed(18.dp),
+                contentPadding = PaddingValues(horizontal = 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(options, key = { it.value }) { option ->
                     LiveSelectionChip(
                         option = option,
                         selected = option.value == currentValue,

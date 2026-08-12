@@ -2,6 +2,7 @@
 #include "emucorex/android_crash_diagnostics.h"
 
 #include "GS/GS.h"
+#include "GS/Renderers/Common/GSRenderer.h"
 #include "MTGS.h"
 #include "common/FileSystem.h"
 #include "common/HostSys.h"
@@ -13,6 +14,7 @@
 #include "pcsx2/HangTrace.h"
 #include "pcsx2/Host.h"
 #include "pcsx2/JitProfiler.h"
+#include "pcsx2/DEV9/InternetLinkAdapter.h"
 #include "pcsx2/ps2/BiosTools.h"
 
 #if defined(EMUCOREX_ENABLE_NATIVE_SELF_TESTS)
@@ -358,6 +360,67 @@ bool DispatchRetroAchievementsSound(const char* path)
 
 }
 
+std::string ResolveArcadeAssetUriJNI(const char* manifest_uri, const char* relative_path)
+{
+	if (!manifest_uri || !relative_path)
+		return {};
+
+	JavaVM* java_vm = nullptr;
+	jclass native_app_class = nullptr;
+	{
+		std::lock_guard lock(s_callback_mutex);
+		java_vm = s_java_vm;
+		native_app_class = s_native_app_class;
+	}
+	if (!java_vm || !native_app_class)
+		return {};
+
+	JNIEnv* env = nullptr;
+	bool did_attach = false;
+	if (java_vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK)
+	{
+		if (java_vm->AttachCurrentThread(&env, nullptr) != JNI_OK || !env)
+			return {};
+		did_attach = true;
+	}
+
+	std::string result;
+	const jmethodID method = env->GetStaticMethodID(native_app_class, "resolveArcadeAssetUri",
+		"(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+	if (method)
+	{
+		jstring j_manifest = env->NewStringUTF(manifest_uri);
+		jstring j_relative = env->NewStringUTF(relative_path);
+		if (j_manifest && j_relative)
+		{
+			jstring j_result = static_cast<jstring>(
+				env->CallStaticObjectMethod(native_app_class, method, j_manifest, j_relative));
+			if (j_result)
+			{
+				const char* chars = env->GetStringUTFChars(j_result, nullptr);
+				if (chars)
+				{
+					result.assign(chars);
+					env->ReleaseStringUTFChars(j_result, chars);
+				}
+				env->DeleteLocalRef(j_result);
+			}
+		}
+		if (j_manifest)
+			env->DeleteLocalRef(j_manifest);
+		if (j_relative)
+			env->DeleteLocalRef(j_relative);
+	}
+	if (env->ExceptionCheck())
+	{
+		env->ExceptionClear();
+		result.clear();
+	}
+	if (did_attach)
+		java_vm->DetachCurrentThread();
+	return result;
+}
+
 int FileSystem::OpenFDFileContent(const char* filename)
 {
 	if (!filename)
@@ -443,6 +506,18 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_sbro_emucorex_core_NativeApp_getPe
 {
 	return StringToJString(env, emucorex::android::GetPerformanceMetricsSnapshot());
 }
+
+extern "C" JNIEXPORT jfloatArray JNICALL Java_com_sbro_emucorex_core_NativeApp_getDisplayDrawRect(JNIEnv* env, jclass)
+{
+	if (!AndroidRuntime::Instance().HasValidVm())
+		return nullptr;
+	const GSVector4 rect = GSRenderer::GetLastDrawRect();
+	const jfloat values[4] = {rect.x, rect.y, rect.z, rect.w};
+	jfloatArray result = env->NewFloatArray(4);
+	if (result)
+		env->SetFloatArrayRegion(result, 0, 4, values);
+	return result;
+}
 extern "C" JNIEXPORT jstring JNICALL Java_com_sbro_emucorex_core_NativeApp_getCoreVersion(JNIEnv* env, jclass)
 {
 	return StringToJString(env, BuildVersion::GitRev ? BuildVersion::GitRev : "Unknown");
@@ -456,6 +531,30 @@ extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorex_core_NativeApp_queueGsD
 	});
 }
 extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorex_core_NativeApp_setPadButton(JNIEnv*, jclass, jint pad_index, jint index, jint range, jboolean pressed) { AndroidRuntime::Instance().SetPadButton(pad_index, index, range, pressed == JNI_TRUE); }
+extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorex_core_NativeApp_setInternetLinkTransportReady(JNIEnv*, jclass, jboolean ready) { InternetLinkBridge::SetTransportReady(ready == JNI_TRUE); }
+extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorex_core_NativeApp_resetInternetLinkTransport(JNIEnv*, jclass) { InternetLinkBridge::Reset(); }
+extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorex_core_NativeApp_pushInternetLinkFrame(JNIEnv* env, jclass, jbyteArray frame)
+{
+	if (frame == nullptr)
+		return JNI_FALSE;
+	const jsize size = env->GetArrayLength(frame);
+	if (size <= 0 || size > 1514)
+		return JNI_FALSE;
+	std::array<std::uint8_t, 1514> data{};
+	env->GetByteArrayRegion(frame, 0, size, reinterpret_cast<jbyte*>(data.data()));
+	return InternetLinkBridge::PushInbound(data.data(), static_cast<std::size_t>(size)) ? JNI_TRUE : JNI_FALSE;
+}
+extern "C" JNIEXPORT jbyteArray JNICALL Java_com_sbro_emucorex_core_NativeApp_pollInternetLinkFrame(JNIEnv* env, jclass)
+{
+	std::array<std::uint8_t, 1514> data{};
+	std::size_t size = 0;
+	if (!InternetLinkBridge::PopOutbound(data.data(), data.size(), &size))
+		return nullptr;
+	jbyteArray result = env->NewByteArray(static_cast<jsize>(size));
+	if (result != nullptr)
+		env->SetByteArrayRegion(result, 0, static_cast<jsize>(size), reinterpret_cast<const jbyte*>(data.data()));
+	return result;
+}
 extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorex_core_NativeApp_setPadPressureModifierAmount(JNIEnv*, jclass, jint amount_percent) { AndroidRuntime::Instance().SetPadPressureModifierAmount(amount_percent); }
 extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorex_core_NativeApp_onHostKeyEvent(JNIEnv*, jclass, jint key_code, jboolean pressed) { AndroidRuntime::Instance().OnHostKeyEvent(key_code, pressed == JNI_TRUE); }
 extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorex_core_NativeApp_onHostMousePosition(JNIEnv*, jclass, jfloat x, jfloat y) { AndroidRuntime::Instance().OnHostMousePosition(x, y); }
@@ -511,6 +610,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorex_core_NativeApp_onNative
 	AndroidRuntime::Instance().ClearSurface();
 }
 extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorex_core_NativeApp_runVMThread(JNIEnv* env, jclass, jstring path) { return AndroidRuntime::Instance().StartVm(JStringToString(env, path), false, 0) ? JNI_TRUE : JNI_FALSE; }
+extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorex_core_NativeApp_changeDisc(JNIEnv* env, jclass, jstring path) { return AndroidRuntime::Instance().ChangeDisc(JStringToString(env, path)) ? JNI_TRUE : JNI_FALSE; }
 extern "C" JNIEXPORT jint JNICALL Java_com_sbro_emucorex_core_NativeApp_runBootSmokeProbe(JNIEnv* env, jclass, jstring path, jint steps) { return AndroidRuntime::Instance().StartVm(JStringToString(env, path), false, steps) ? 1 : 0; }
 extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorex_core_NativeApp_runJitExecutableMemorySmokeTest(JNIEnv*, jclass) { return RunExecutableMemorySmokeTest() ? JNI_TRUE : JNI_FALSE; }
 #if defined(EMUCOREX_ENABLE_NATIVE_SELF_TESTS)

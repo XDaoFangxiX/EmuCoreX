@@ -5,6 +5,9 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import android.view.Surface
 import com.sbro.emucorex.data.AppPreferences
+import com.sbro.emucorex.network.NetPlaySession
+import com.sbro.emucorex.network.RemotePlaySession
+import com.sbro.emucorex.data.DisplayCrop
 import com.sbro.emucorex.core.utils.NetworkAdapterCollector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -310,6 +313,8 @@ object EmulatorBridge {
         gpuHardwareProfile: Int = GpuHardwareProfiles.ADRENO,
         mediatekAngleOpenGl: Boolean = false,
         aspectRatio: Int = 1,
+        localMultiplayerMode: Int = AppPreferences.LOCAL_MULTIPLAYER_OFF,
+        displayCrop: DisplayCrop = DisplayCrop.None,
         audioVolume: Int = AudioDefaults.VOLUME_DEFAULT,
         audioFastForwardVolume: Int = AudioDefaults.VOLUME_DEFAULT,
         audioMuted: Boolean = false,
@@ -357,6 +362,8 @@ object EmulatorBridge {
         trilinearFiltering: Int = GsHackDefaults.TRILINEAR_FILTERING_DEFAULT,
         blendingAccuracy: Int = GsHackDefaults.BLENDING_ACCURACY_DEFAULT,
         texturePreloading: Int = GsHackDefaults.TEXTURE_PRELOADING_DEFAULT,
+        shaderChainEnabled: Boolean = false,
+        shaderChainPreset: String = "",
         enableFxaa: Boolean = false,
         casMode: Int = 0,
         sgsrMode: Int = 0,
@@ -510,7 +517,13 @@ object EmulatorBridge {
             buildList {
                 add(settingOp("EmuCore/GS", "Renderer", "int", resolvedRenderer.toString()))
                 add(settingOp("DEV9/Eth", "EthEnable", "bool", effectiveDev9EthernetEnabled.toString()))
-                add(settingOp("DEV9/Eth", "EthApi", "string", if (dev9LocalLinkMode == AppPreferences.DEV9_LOCAL_LINK_OFF) "Sockets" else "Local Link"))
+                add(settingOp("DEV9/Eth", "EthApi", "string", when (dev9LocalLinkMode) {
+                    AppPreferences.DEV9_INTERNET_LINK_HOST,
+                    AppPreferences.DEV9_INTERNET_LINK_JOIN -> "Internet Link"
+                    AppPreferences.DEV9_LOCAL_LINK_HOST,
+                    AppPreferences.DEV9_LOCAL_LINK_JOIN -> "Local Link"
+                    else -> "Sockets"
+                }))
                 add(settingOp("DEV9/Eth", "EthDevice", "string", dev9EthernetDevice.ifBlank { "Auto" }))
                 add(settingOp("DEV9/Eth", "InterceptDHCP", "bool", dev9InterceptDhcp.toString()))
                 add(settingOp("DEV9/Eth", "ModeDNS1", "string", dev9Dns1Mode))
@@ -519,7 +532,10 @@ object EmulatorBridge {
                 add(settingOp("DEV9/Eth", "DNS2", "string", dev9Dns2))
                 add(settingOp("DEV9/Eth", "EthLogDHCP", "bool", dev9LogDhcp.toString()))
                 add(settingOp("DEV9/Eth", "EthLogDNS", "bool", dev9LogDns.toString()))
-                add(settingOp("DEV9/Eth", "LocalLinkHost", "bool", (dev9LocalLinkMode == AppPreferences.DEV9_LOCAL_LINK_HOST).toString()))
+                add(settingOp("DEV9/Eth", "LocalLinkHost", "bool", (
+                    dev9LocalLinkMode == AppPreferences.DEV9_LOCAL_LINK_HOST ||
+                        dev9LocalLinkMode == AppPreferences.DEV9_INTERNET_LINK_HOST
+                    ).toString()))
                 add(settingOp("DEV9/Eth", "LocalLinkAddress", "string", dev9LocalLinkAddress))
                 add(settingOp("DEV9/Eth", "LocalLinkPort", "int", dev9LocalLinkPort.coerceIn(1024, 65535).toString()))
                 add(settingOp("DEV9/Eth", "LocalLinkPeerId", "int", dev9LocalLinkPeerId.coerceIn(2, 65533).toString()))
@@ -529,6 +545,23 @@ object EmulatorBridge {
                 add(settingOp("Pad2", "PressureModifier", "float", pressureAmount.toString()))
                 add(upscaleOp(upscaleMultiplier))
                 add(aspectOp(aspectRatio))
+                add(
+                    settingOp(
+                        "EmuCore/GS",
+                        "LocalMultiplayerMode",
+                        "int",
+                        localMultiplayerMode.coerceIn(
+                            AppPreferences.LOCAL_MULTIPLAYER_OFF,
+                            AppPreferences.LOCAL_MULTIPLAYER_HORIZONTAL_CROP_SWAPPED
+                        ).toString()
+                    )
+                )
+                displayCrop.sanitized().let { crop ->
+                    add(settingOp("EmuCore/GS", "CropLeft", "int", crop.left.toString()))
+                    add(settingOp("EmuCore/GS", "CropTop", "int", crop.top.toString()))
+                    add(settingOp("EmuCore/GS", "CropRight", "int", crop.right.toString()))
+                    add(settingOp("EmuCore/GS", "CropBottom", "int", crop.bottom.toString()))
+                }
                 add(settingOp("SPU2/Output", "StandardVolume", "int", AudioDefaults.coerceVolume(audioVolume).toString()))
                 add(settingOp("SPU2/Output", "FastForwardVolume", "int", AudioDefaults.coerceVolume(audioFastForwardVolume).toString()))
                 add(settingOp("SPU2/Output", "OutputMuted", "bool", audioMuted.toString()))
@@ -614,6 +647,8 @@ object EmulatorBridge {
                 add(settingOp("EmuCore/GS", "TriFilter", "int", trilinearFiltering.toString()))
                 add(settingOp("EmuCore/GS", "accurate_blending_unit", "int", blendingAccuracy.toString()))
                 add(settingOp("EmuCore/GS", "texture_preloading", "int", texturePreloading.toString()))
+                add(settingOp("EmuCore/GS", "ShaderChainEnabled", "bool", (shaderChainEnabled && shaderChainPreset.isNotBlank()).toString()))
+                add(settingOp("EmuCore/GS", "ShaderChainPreset", "string", shaderChainPreset.trim()))
                 add(settingOp("EmuCore/GS", "LoadTextureReplacements", "bool", textureReplacementsEnabled.toString()))
                 add(settingOp("EmuCore/GS", "LoadTextureReplacementsAsync", "bool", textureReplacementsAsync.toString()))
                 add(settingOp("EmuCore/GS", "PrecacheTextureReplacements", "bool", textureReplacementsPrecache.toString()))
@@ -1112,6 +1147,23 @@ object EmulatorBridge {
         }
     }
 
+    /**
+     * Replaces the mounted PS2 disc without restarting the VM. Native code performs
+     * the CDVD mutation on the CPU thread and restores the previous image on failure.
+     */
+    suspend fun changeDisc(path: String): Boolean {
+        if (!isNativeLoaded || !isVmActive || path.isBlank()) return false
+        return runSerial {
+            try {
+                NativeApp.logCrashBreadcrumb("disc swap requested pathType=${path.substringBefore(':', "file")}")
+                NativeApp.changeDisc(path)
+            } catch (error: Exception) {
+                Log.e(TAG, "Disc swap failed", error)
+                false
+            }
+        }
+    }
+
     suspend fun setRenderer(gpuType: Int) {
         val resolvedRenderer = normalizeRenderer(gpuType)
         settingsCache["EmuCore/GS:Renderer"] = resolvedRenderer.toString()
@@ -1133,6 +1185,31 @@ object EmulatorBridge {
         val value = aspectRatioSettingValues.getValue(normalizedType)
         settingsCache["EmuCore/GS:AspectRatio"] = value
         performRuntimeOps(listOf(aspectOp(normalizedType)))
+    }
+
+    suspend fun setDisplayCrop(value: DisplayCrop) {
+        val crop = value.sanitized()
+        val values = listOf(
+            "CropLeft" to crop.left,
+            "CropTop" to crop.top,
+            "CropRight" to crop.right,
+            "CropBottom" to crop.bottom
+        )
+        values.forEach { (key, pixels) -> settingsCache["EmuCore/GS:$key"] = pixels.toString() }
+        performRuntimeOps(values.map { (key, pixels) ->
+            settingOp("EmuCore/GS", key, "int", pixels.toString())
+        })
+    }
+
+    suspend fun setLocalMultiplayerMode(mode: Int) {
+        val normalized = mode.coerceIn(
+            AppPreferences.LOCAL_MULTIPLAYER_OFF,
+            AppPreferences.LOCAL_MULTIPLAYER_HORIZONTAL_CROP_SWAPPED
+        )
+        settingsCache["EmuCore/GS:LocalMultiplayerMode"] = normalized.toString()
+        performRuntimeOps(
+            listOf(settingOp("EmuCore/GS", "LocalMultiplayerMode", "int", normalized.toString()))
+        )
     }
 
     suspend fun setCustomDriverPath(path: String) {
@@ -1195,7 +1272,9 @@ object EmulatorBridge {
     fun setPadButton(padIndex: Int, index: Int, range: Int, pressed: Boolean) {
         if (!isNativeLoaded) return
         try {
-            NativeApp.setPadButton(padIndex, index, range, pressed)
+            if (RemotePlaySession.forwardGuestButton(index, range, pressed)) return
+            val mappedPadIndex = NetPlaySession.mapAndSendLocalButton(padIndex, index, range, pressed)
+            NativeApp.setPadButton(mappedPadIndex, index, range, pressed)
         } catch (_: Exception) { }
     }
 

@@ -745,7 +745,7 @@ Pcsx2Config::GSOptions::GSOptions()
 	OsdShowInputRec = true;
 	OsdShowTextureReplacements = false;
 
-	HWDownloadMode = GSHardwareDownloadMode::Disabled;
+	HWDownloadMode = GSHardwareDownloadMode::NoReadbacks;
 	HWSpinGPUForReadbacks = false;
 	HWSpinCPUForReadbacks = false;
 	GPUPaletteConversion = false;
@@ -819,6 +819,7 @@ bool Pcsx2Config::GSOptions::OptionsAreEqual(const GSOptions& right) const
 		OpEqu(Crop[1]) &&
 		OpEqu(Crop[2]) &&
 		OpEqu(Crop[3]) &&
+		OpEqu(LocalMultiplayerMode) &&
 
 		OpEqu(OsdScale) &&
 		OpEqu(OsdMargin) &&
@@ -882,6 +883,9 @@ bool Pcsx2Config::GSOptions::OptionsAreEqual(const GSOptions& right) const
 		OpEqu(ScreenshotSize) &&
 		OpEqu(ScreenshotFormat) &&
 		OpEqu(ScreenshotQuality) &&
+
+		OpEqu(ShaderChainEnabled) &&
+		OpEqu(ShaderChainPreset) &&
 
 		OpEqu(CaptureContainer) &&
 		OpEqu(VideoCaptureCodec) &&
@@ -950,6 +954,7 @@ void Pcsx2Config::GSOptions::LoadSave(SettingsWrapper& wrap)
 	SettingsWrapEntryEx(Crop[1], "CropTop");
 	SettingsWrapEntryEx(Crop[2], "CropRight");
 	SettingsWrapEntryEx(Crop[3], "CropBottom");
+	SettingsWrapEntryEx(LocalMultiplayerMode, "LocalMultiplayerMode");
 
 	// Unfortunately, because code in the GS still reads the setting by key instead of
 	// using these variables, we need to use the old names. Maybe post 2.0 we can change this.
@@ -1113,6 +1118,9 @@ void Pcsx2Config::GSOptions::LoadSave(SettingsWrapper& wrap)
 	SettingsWrapBitfieldEx(SaveFrameStart, "SaveFrameStart");
 	SettingsWrapBitfieldEx(SaveFrameCount, "SaveFrameCount");
 	SettingsWrapBitfieldEx(SaveFrameBy, "SaveFrameBy");
+
+	SettingsWrapEntryEx(ShaderChainEnabled, "ShaderChainEnabled");
+	SettingsWrapEntryEx(ShaderChainPreset, "ShaderChainPreset");
 
 	SettingsWrapEntryEx(CaptureContainer, "CaptureContainer");
 	SettingsWrapEntryEx(VideoCaptureCodec, "VideoCaptureCodec");
@@ -1351,6 +1359,7 @@ const char* Pcsx2Config::DEV9Options::NetApiNames[] = {
 	"TAP",
 	"Sockets",
 	"Local Link",
+	"Internet Link",
 	nullptr};
 
 const char* Pcsx2Config::DEV9Options::DnsModeNames[] = {
@@ -2072,6 +2081,7 @@ void Pcsx2Config::LoadSaveCore(SettingsWrapper& wrap)
 	GS.LoadSave(wrap);
 	SPU2.LoadSave(wrap);
 	DEV9.LoadSave(wrap);
+	Arcade.LoadSave(wrap);
 	Gamefixes.LoadSave(wrap);
 	Profiler.LoadSave(wrap);
 	Savestate.LoadSave(wrap);
@@ -2450,4 +2460,26 @@ std::string EmuFolders::GetOverridableResourcePath(std::string_view name)
 	}
 
 	return upath;
+}
+
+void Pcsx2Config::ArcadeOptions::LoadSave(SettingsWrapper& wrap)
+{
+	SettingsWrapSection("Arcade");
+	SettingsWrapEntry(ATAVerboseReads);
+	SettingsWrapEntry(RAMVerboseReads);
+	SettingsWrapEntry(SRAMVerboseReads);
+	SettingsWrapEntry(UARTVerbose);
+}
+
+bool Pcsx2Config::ArcadeOptions::operator!=(const ArcadeOptions& right) const
+{
+	return !this->operator==(right);
+}
+
+bool Pcsx2Config::ArcadeOptions::operator==(const ArcadeOptions& right) const
+{
+	return OpEqu(ATAVerboseReads) &&
+		   OpEqu(RAMVerboseReads) &&
+		   OpEqu(UARTVerbose) &&
+		   OpEqu(SRAMVerboseReads);
 }

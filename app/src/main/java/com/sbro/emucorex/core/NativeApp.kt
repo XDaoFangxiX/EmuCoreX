@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
+import android.provider.DocumentsContract
 import android.util.Log
 import android.view.Surface
 import org.json.JSONArray
@@ -64,6 +65,51 @@ object NativeApp {
     }
 
     @JvmStatic external fun initialize(path: String, apiVer: Int)
+
+    /** Resolves an arcade manifest asset without copying multi-gigabyte CHD images. */
+    @JvmStatic
+    fun resolveArcadeAssetUri(manifestUri: String, relativePath: String): String? {
+        val context = getContext() ?: return null
+        return runCatching {
+            val manifest = manifestUri.toUri()
+            val manifestId = DocumentsContract.getDocumentId(manifest)
+            val rootId = context.contentResolver.persistedUriPermissions
+                .asSequence()
+                .filter { it.isReadPermission && it.uri.authority == manifest.authority }
+                .mapNotNull { permission ->
+                    runCatching { DocumentsContract.getTreeDocumentId(permission.uri) }.getOrNull()
+                }
+                .filter { candidate ->
+                    manifestId == candidate || manifestId.startsWith(if (candidate.endsWith(':')) candidate else "$candidate/")
+                }
+                .maxByOrNull(String::length)
+                ?: return@runCatching null
+
+            var targetId = manifestId.substringBeforeLast('/', manifestId)
+            relativePath.replace('\\', '/').split('/').forEach { part ->
+                when (part) {
+                    "", "." -> Unit
+                    ".." -> {
+                        if (targetId != rootId) {
+                            targetId = targetId.substringBeforeLast('/', targetId)
+                        }
+                    }
+                    else -> targetId += "/$part"
+                }
+            }
+            val rootPrefix = if (rootId.endsWith(':')) rootId else "$rootId/"
+            if (targetId != rootId && !targetId.startsWith(rootPrefix)) return@runCatching null
+
+            val target = runCatching {
+                DocumentsContract.buildDocumentUriUsingTree(manifest, targetId)
+            }.getOrElse {
+                DocumentsContract.buildDocumentUri(manifest.authority, targetId)
+            }
+            context.contentResolver.openFileDescriptor(target, "r")?.use { target.toString() }
+        }.onFailure { error ->
+            Log.w(TAG, "Unable to resolve arcade asset $relativePath", error)
+        }.getOrNull()
+    }
     @Suppress("unused") // Exported JNI entry point retained for native data-root reloads.
     @JvmStatic external fun reloadDataRoot(path: String)
     @JvmStatic external fun setSystemCaBundlePath(path: String)
@@ -73,9 +119,14 @@ object NativeApp {
     @JvmStatic external fun isBiosFd(fd: Int): Boolean
     @JvmStatic external fun setPerformanceMetricsEnabled(visible: Boolean, detailed: Boolean, gpuTiming: Boolean)
     @JvmStatic external fun getPerformanceMetricsSnapshot(): String?
+    @JvmStatic external fun getDisplayDrawRect(): FloatArray?
     @JvmStatic external fun getCoreVersion(): String?
     @JvmStatic external fun queueGsDump(frames: Int)
     @JvmStatic external fun setPadButton(padIndex: Int, index: Int, range: Int, pressed: Boolean)
+    @JvmStatic external fun setInternetLinkTransportReady(ready: Boolean)
+    @JvmStatic external fun resetInternetLinkTransport()
+    @JvmStatic external fun pushInternetLinkFrame(frame: ByteArray): Boolean
+    @JvmStatic external fun pollInternetLinkFrame(): ByteArray?
     @JvmStatic external fun setPadPressureModifierAmount(amountPercent: Int)
     @JvmStatic external fun onHostKeyEvent(keyCode: Int, pressed: Boolean)
     @JvmStatic external fun onHostMousePosition(x: Float, y: Float)
@@ -102,6 +153,8 @@ object NativeApp {
     @JvmStatic external fun onNativeSurfaceChanged(surface: Surface, width: Int, height: Int)
     @JvmStatic external fun onNativeSurfaceDestroyed()
     @JvmStatic external fun runVMThread(path: String): Boolean
+    /** Hot-swaps the mounted image on the CPU thread and leaves the VM paused for the caller to resume. */
+    @JvmStatic external fun changeDisc(path: String): Boolean
     @JvmStatic external fun runBootSmokeProbe(path: String, steps: Int): Int
     @JvmStatic external fun runJitExecutableMemorySmokeTest(): Boolean
     @JvmStatic external fun runEeFpuDivRoundingSelfTest(): String

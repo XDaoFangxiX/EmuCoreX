@@ -29,9 +29,17 @@ import com.sbro.emucorex.core.StorageAccess
 import com.sbro.emucorex.core.TvInterfaceMode
 import com.sbro.emucorex.core.normalizeUpscale
 import com.sbro.emucorex.data.AppPreferences
+import com.sbro.emucorex.data.DisplayCrop
 import com.sbro.emucorex.data.AppFontChoice
 import com.sbro.emucorex.data.HomeBackgroundRepository
+import com.sbro.emucorex.data.HomeBackgroundPreset
 import com.sbro.emucorex.data.HomeBackgroundType
+import com.sbro.emucorex.data.EmulationSideArtwork
+import com.sbro.emucorex.data.EmulationSideArtworkRepository
+import com.sbro.emucorex.data.RetroArchShaderPreset
+import com.sbro.emucorex.data.RetroArchShaderRepository
+import com.sbro.emucorex.data.ShaderPackInstallProgress
+import com.sbro.emucorex.data.ShaderPackInstallStage
 import com.sbro.emucorex.data.TouchControlVisualStyle
 import com.sbro.emucorex.data.TouchControlPressEffect
 import com.sbro.emucorex.data.GameMenuLayoutStyle
@@ -80,8 +88,20 @@ data class SettingsUiState(
     val customFontRevision: Int = 0,
     val homeGridScale: Float = AppPreferences.DEFAULT_HOME_GRID_SCALE,
     val homeBackgroundType: HomeBackgroundType = HomeBackgroundType.NONE,
+    val homeBackgroundPreset: HomeBackgroundPreset = HomeBackgroundPreset.OLYMPUS,
     val homeBackgroundRevision: Int = 0,
     val homeBackgroundDim: Int = AppPreferences.DEFAULT_HOME_BACKGROUND_DIM,
+    val emulationSideArtwork: EmulationSideArtwork = EmulationSideArtwork.NONE,
+    val emulationSideArtworkRevision: Int = 0,
+    val emulationSideArtworkDim: Int = AppPreferences.DEFAULT_EMULATION_SIDE_ARTWORK_DIM,
+    val isSideArtworkImporting: Boolean = false,
+    val shaderChainEnabled: Boolean = false,
+    val shaderChainPreset: String = "",
+    val shaderPresets: List<RetroArchShaderPreset> = emptyList(),
+    val isShaderPackInstalled: Boolean = false,
+    val isShaderPackBusy: Boolean = false,
+    val shaderPackProgress: ShaderPackInstallProgress? = null,
+    val shaderPackMessageResId: Int? = null,
     val touchControlVisualStyle: TouchControlVisualStyle = TouchControlVisualStyle.CLASSIC,
     val touchControlPressEffect: TouchControlPressEffect = TouchControlPressEffect.GROW,
     val gameMenuLayoutStyle: GameMenuLayoutStyle = GameMenuLayoutStyle.SIDEBAR,
@@ -107,6 +127,8 @@ data class SettingsUiState(
     val renderer: Int = RendererDefaults.defaultForHardware(),
     val upscaleMultiplier: Float = 1f,
     val aspectRatio: Int = 1,
+    val localMultiplayerMode: Int = AppPreferences.LOCAL_MULTIPLAYER_OFF,
+    val displayCrop: DisplayCrop = DisplayCrop.None,
     val audioVolume: Int = AudioDefaults.VOLUME_DEFAULT,
     val audioFastForwardVolume: Int = AudioDefaults.VOLUME_DEFAULT,
     val audioMuted: Boolean = false,
@@ -299,6 +321,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val preferences = AppPreferences(application)
     private val customFontRepository = CustomFontRepository(application)
     private val homeBackgroundRepository = HomeBackgroundRepository(application)
+    private val emulationSideArtworkRepository = EmulationSideArtworkRepository(application)
+    private val retroArchShaderRepository = RetroArchShaderRepository(application)
     private val appUpdateRepository = AppUpdateRepository(application)
     private val gpuDriverManager = GpuDriverManager(application)
     private val gpuDriverCatalogRepository = GpuDriverCatalogRepository(application)
@@ -309,6 +333,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     init {
         refreshInstalledGpuDrivers()
+        refreshShaderPresets()
         viewModelScope.launch {
             preferences.cleanupLegacyClampingPreferencesIfNeeded()
             preferences.settingsSnapshot.collect { snapshot ->
@@ -360,8 +385,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             customFontRevision = snapshot.customFontRevision,
             homeGridScale = snapshot.homeGridScale,
             homeBackgroundType = snapshot.homeBackgroundType,
+            homeBackgroundPreset = snapshot.homeBackgroundPreset,
             homeBackgroundRevision = snapshot.homeBackgroundRevision,
             homeBackgroundDim = snapshot.homeBackgroundDim,
+            emulationSideArtwork = snapshot.emulationSideArtwork,
+            emulationSideArtworkRevision = snapshot.emulationSideArtworkRevision,
+            emulationSideArtworkDim = snapshot.emulationSideArtworkDim,
+            shaderChainEnabled = snapshot.shaderChainEnabled,
+            shaderChainPreset = snapshot.shaderChainPreset,
             touchControlVisualStyle = snapshot.touchControlVisualStyle,
             touchControlPressEffect = snapshot.touchControlPressEffect,
             gameMenuLayoutStyle = snapshot.gameMenuLayoutStyle,
@@ -377,6 +408,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             renderer = snapshot.renderer,
             upscaleMultiplier = snapshot.upscaleMultiplier,
             aspectRatio = snapshot.aspectRatio,
+            localMultiplayerMode = snapshot.localMultiplayerMode,
+            displayCrop = snapshot.displayCrop,
             audioVolume = snapshot.audioVolume,
             audioFastForwardVolume = snapshot.audioFastForwardVolume,
             audioMuted = snapshot.audioMuted,
@@ -642,6 +675,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferences.setHomeBackgroundDim(dim)
     }
 
+    fun setEmulationSideArtworkDim(dim: Int) = viewModelScope.launch {
+        preferences.setEmulationSideArtworkDim(dim)
+    }
+
     fun setTouchControlVisualStyle(style: TouchControlVisualStyle) = viewModelScope.launch {
         preferences.setTouchControlVisualStyle(style)
     }
@@ -732,6 +769,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         )
     }
 
+    fun setHomeBackgroundPreset(preset: HomeBackgroundPreset) = viewModelScope.launch {
+        preferences.setHomeBackgroundPreset(preset)
+    }
+
     fun clearHomeBackground() = viewModelScope.launch(Dispatchers.IO) {
         homeBackgroundRepository.clear()
         preferences.setHomeBackgroundType(HomeBackgroundType.NONE)
@@ -740,11 +781,115 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         )
     }
 
+    fun setEmulationSideArtwork(artwork: EmulationSideArtwork) = viewModelScope.launch {
+        if (artwork != EmulationSideArtwork.CUSTOM || emulationSideArtworkRepository.existingCustomFile() != null) {
+            preferences.setEmulationSideArtwork(artwork)
+        }
+    }
+
+    fun installEmulationSideArtwork(uri: Uri) = viewModelScope.launch {
+        _uiState.value = _uiState.value.copy(
+            isSideArtworkImporting = true,
+            customizationMessageResId = null
+        )
+        val result = emulationSideArtworkRepository.install(uri)
+        if (result.isSuccess) {
+            preferences.setEmulationSideArtwork(EmulationSideArtwork.CUSTOM)
+        }
+        _uiState.value = _uiState.value.copy(
+            isSideArtworkImporting = false,
+            customizationMessageResId = if (result.isSuccess) {
+                com.sbro.emucorex.R.string.settings_customization_side_artwork_applied
+            } else {
+                com.sbro.emucorex.R.string.settings_customization_side_artwork_failed
+            }
+        )
+    }
+
+    fun clearCustomEmulationSideArtwork() = viewModelScope.launch(Dispatchers.IO) {
+        emulationSideArtworkRepository.clear()
+        preferences.setEmulationSideArtwork(EmulationSideArtwork.NONE)
+        _uiState.value = _uiState.value.copy(
+            customizationMessageResId = com.sbro.emucorex.R.string.settings_customization_side_artwork_removed
+        )
+    }
+
+    fun refreshShaderPresets() = viewModelScope.launch(Dispatchers.IO) {
+        val presets = retroArchShaderRepository.listPresets()
+        _uiState.value = _uiState.value.copy(
+            shaderPresets = presets,
+            isShaderPackInstalled = retroArchShaderRepository.hasInstalledPack()
+        )
+    }
+
+    fun setShaderChainEnabled(enabled: Boolean) = viewModelScope.launch {
+        val preset = _uiState.value.shaderChainPreset
+        preferences.setShaderChain(enabled, preset)
+        EmulatorBridge.setSetting("EmuCore/GS", "ShaderChainEnabled", "bool", enabled.toString())
+        EmulatorBridge.setSetting("EmuCore/GS", "ShaderChainPreset", "string", preset)
+    }
+
+    fun setShaderChainPreset(path: String) = viewModelScope.launch {
+        val enabled = path.isNotBlank() && _uiState.value.shaderChainEnabled
+        preferences.setShaderChain(enabled, path)
+        EmulatorBridge.setSetting("EmuCore/GS", "ShaderChainEnabled", "bool", enabled.toString())
+        EmulatorBridge.setSetting("EmuCore/GS", "ShaderChainPreset", "string", path)
+    }
+
+    fun downloadOfficialShaderPack() {
+        if (_uiState.value.isShaderPackInstalled) return
+        installShaderPack(
+            initialProgress = ShaderPackInstallProgress(ShaderPackInstallStage.DOWNLOADING)
+        ) { onProgress ->
+            retroArchShaderRepository.downloadOfficialPack(onProgress)
+        }
+    }
+
+    fun importShaderPack(uri: Uri) = installShaderPack(
+        initialProgress = ShaderPackInstallProgress(ShaderPackInstallStage.INSTALLING)
+    ) {
+        retroArchShaderRepository.importArchive(uri)
+    }
+
+    private fun installShaderPack(
+        initialProgress: ShaderPackInstallProgress,
+        block: ((ShaderPackInstallProgress) -> Unit) -> Result<Int>
+    ) = viewModelScope.launch(Dispatchers.IO) {
+        if (_uiState.value.isShaderPackBusy) return@launch
+        _uiState.value = _uiState.value.copy(
+            isShaderPackBusy = true,
+            shaderPackProgress = initialProgress,
+            shaderPackMessageResId = null
+        )
+        val result = block { progress ->
+            _uiState.value = _uiState.value.copy(shaderPackProgress = progress)
+        }
+        val presets = retroArchShaderRepository.listPresets()
+        _uiState.value = _uiState.value.copy(
+            isShaderPackBusy = false,
+            shaderPackProgress = null,
+            shaderPresets = presets,
+            isShaderPackInstalled = retroArchShaderRepository.hasInstalledPack(),
+            shaderPackMessageResId = if (result.isSuccess) {
+                com.sbro.emucorex.R.string.settings_shader_pack_installed
+            } else {
+                com.sbro.emucorex.R.string.settings_shader_pack_failed
+            }
+        )
+    }
+
+    fun clearShaderPackMessage() {
+        _uiState.value = _uiState.value.copy(shaderPackMessageResId = null)
+    }
+
     fun resetCustomization() = viewModelScope.launch(Dispatchers.IO) {
         homeBackgroundRepository.clear()
+        emulationSideArtworkRepository.clear()
         customFontRepository.clear()
         preferences.setHomeBackgroundType(HomeBackgroundType.NONE)
         preferences.setHomeBackgroundDim(AppPreferences.DEFAULT_HOME_BACKGROUND_DIM)
+        preferences.setEmulationSideArtwork(EmulationSideArtwork.NONE)
+        preferences.setEmulationSideArtworkDim(AppPreferences.DEFAULT_EMULATION_SIDE_ARTWORK_DIM)
         preferences.setHomeGridScale(AppPreferences.DEFAULT_HOME_GRID_SCALE)
         preferences.setAppFontChoice(AppFontChoice.SYSTEM)
         preferences.clearCustomFont()
@@ -896,6 +1041,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             preferences.setAspectRatio(value)
             EmulatorBridge.setAspectRatio(value)
+        }
+    }
+
+    fun setLocalMultiplayerMode(value: Int) {
+        viewModelScope.launch {
+            preferences.setLocalMultiplayerMode(value)
+            EmulatorBridge.setLocalMultiplayerMode(value)
+        }
+    }
+
+    fun setDisplayCrop(value: DisplayCrop) {
+        viewModelScope.launch {
+            val crop = value.sanitized()
+            preferences.setDisplayCrop(crop)
+            EmulatorBridge.setDisplayCrop(crop)
         }
     }
 
@@ -1955,6 +2115,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 gpuHardwareProfile = GpuHardwareProfiles.detectHardwareProfile(),
                 mediatekAngleOpenGl = _uiState.value.mediatekAngleOpenGl,
                 aspectRatio = _uiState.value.aspectRatio,
+                localMultiplayerMode = _uiState.value.localMultiplayerMode,
                 audioVolume = _uiState.value.audioVolume,
                 audioFastForwardVolume = _uiState.value.audioFastForwardVolume,
                 audioMuted = _uiState.value.audioMuted,

@@ -871,6 +871,7 @@ struct Pcsx2Config
 
 		float StretchY = 100.0f;
 		int Crop[4] = {};
+		int LocalMultiplayerMode = 0;
 
 		float OsdScale = DEFAULT_OSD_SCALE;
 		float OsdMargin = DEFAULT_OSD_MARGIN;
@@ -885,7 +886,7 @@ struct Pcsx2Config
 		BiFiltering TextureFiltering = DEFAULT_TEXTURE_FILTERING_MODE;
 		TexturePreloadingLevel TexturePreloading = TexturePreloadingLevel::Full;
 		GSDumpCompressionMethod GSDumpCompression = GSDumpCompressionMethod::Zstandard;
-		GSHardwareDownloadMode HWDownloadMode = GSHardwareDownloadMode::Disabled;
+		GSHardwareDownloadMode HWDownloadMode = GSHardwareDownloadMode::NoReadbacks;
 		GSCASMode CASMode = DEFAULT_CAS_MODE;
 		GSSGSRMode SGSRMode = DEFAULT_SGSR_MODE;
 		u8 Dithering = 2;
@@ -914,6 +915,10 @@ struct Pcsx2Config
 		s8 OverrideTextureBarriers = -1;
 		std::string AndroidGpuProfileOverride = "auto";
 		GSDepthFeedbackMode DepthFeedbackMode = GSDepthFeedbackMode::Auto;
+
+		// RetroArch (.slangp) shader chain, applied at present after post-processing.
+		bool ShaderChainEnabled = false;
+		std::string ShaderChainPreset;
 
 		u8 CAS_Sharpness = 50;
 		u8 ShadeBoost_Brightness = DEFAULT_SHADEBOOST_BRIGHTNESS;
@@ -1059,6 +1064,7 @@ struct Pcsx2Config
 			TAP = 3,
 			Sockets = 4,
 			LocalLink = 5,
+			InternetLink = 6,
 		};
 		static const char* NetApiNames[];
 
@@ -1381,6 +1387,19 @@ struct Pcsx2Config
 
 	// ------------------------------------------------------------------------
 
+	struct ArcadeOptions
+	{
+		bool SRAMVerboseReads = false;
+		bool RAMVerboseReads = false;
+		bool ATAVerboseReads = false;
+		bool UARTVerbose = false;
+
+		void LoadSave(SettingsWrapper& wrap);
+
+		bool operator==(const ArcadeOptions& right) const;
+		bool operator!=(const ArcadeOptions& right) const;
+	};
+
 	BITFIELD32()
 	bool
 		CdvdVerboseReads : 1, // enables cdvd read activity verbosely dumped to the console
@@ -1428,6 +1447,7 @@ struct Pcsx2Config
 	FilenameOptions BaseFilenames;
 
 	AchievementsOptions Achievements;
+	ArcadeOptions Arcade;
 
 	// Memorycard options - first 2 are default slots, last 6 are multitap 1 and 2
 	// slots (3 each)

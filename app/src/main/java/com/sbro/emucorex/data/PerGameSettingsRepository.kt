@@ -20,6 +20,8 @@ data class PerGameSettings(
     val mediatekAngleOpenGl: Boolean = false,
     val upscaleMultiplier: Float = 1f,
     val aspectRatio: Int = 1,
+    val localMultiplayerMode: Int = AppPreferences.LOCAL_MULTIPLAYER_OFF,
+    val displayCrop: DisplayCrop = DisplayCrop.None,
     val showFps: Boolean = false,
     val fpsOverlayMode: Int = AppPreferences.FPS_OVERLAY_MODE_DETAILED,
     val racingMode: Boolean = false,
@@ -69,6 +71,8 @@ data class PerGameSettings(
     val trilinearFiltering: Int = GsHackDefaults.TRILINEAR_FILTERING_DEFAULT,
     val blendingAccuracy: Int = GsHackDefaults.BLENDING_ACCURACY_DEFAULT,
     val texturePreloading: Int = GsHackDefaults.TEXTURE_PRELOADING_DEFAULT,
+    val shaderChainOverrideEnabled: Boolean? = null,
+    val shaderChainPreset: String = "",
     val enableFxaa: Boolean = false,
     val casMode: Int = 0,
     val sgsrMode: Int = 0,
@@ -119,6 +123,27 @@ data class PerGameSettings(
     val providedKeys: Set<String>? = null,
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+internal data class ResolvedShaderChain(
+    val enabled: Boolean,
+    val preset: String
+)
+
+internal fun PerGameSettings.resolveShaderChain(
+    globalEnabled: Boolean,
+    globalPreset: String
+): ResolvedShaderChain {
+    val preset = when (shaderChainOverrideEnabled) {
+        null -> globalPreset
+        false -> ""
+        true -> shaderChainPreset
+    }.trim()
+    val requestedEnabled = shaderChainOverrideEnabled ?: globalEnabled
+    return ResolvedShaderChain(
+        enabled = requestedEnabled && preset.isNotEmpty(),
+        preset = preset.takeIf { requestedEnabled }.orEmpty()
+    )
+}
 
 data class TouchControlsLayoutProfile(
     val dpadOffset: Pair<Float, Float> = AppPreferences.DEFAULT_DPAD_OFFSET_X to AppPreferences.DEFAULT_DPAD_OFFSET_Y,
@@ -242,6 +267,18 @@ private fun JSONObject.toPerGameSettings(): PerGameSettings {
         mediatekAngleOpenGl = optBoolean("mediatekAngleOpenGl", false),
         upscaleMultiplier = readUpscaleMultiplier(),
         aspectRatio = optInt("aspectRatio", 1).let(::sanitizeAspectRatioValue),
+        localMultiplayerMode = optInt(
+            "localMultiplayerMode",
+            AppPreferences.LOCAL_MULTIPLAYER_OFF
+        ).let(::sanitizeLocalMultiplayerMode),
+        displayCrop = optJSONObject("displayCrop")?.let { crop ->
+            DisplayCrop(
+                left = crop.optInt("left", 0),
+                top = crop.optInt("top", 0),
+                right = crop.optInt("right", 0),
+                bottom = crop.optInt("bottom", 0)
+            ).sanitized()
+        } ?: DisplayCrop.None,
         showFps = optBoolean("showFps", false),
         fpsOverlayMode = optInt("fpsOverlayMode", AppPreferences.FPS_OVERLAY_MODE_DETAILED),
         racingMode = optBoolean("racingMode", false),
@@ -320,6 +357,12 @@ private fun JSONObject.toPerGameSettings(): PerGameSettings {
         texturePreloading = GsHackDefaults.coerceTexturePreloading(
             optInt("texturePreloading", GsHackDefaults.TEXTURE_PRELOADING_DEFAULT)
         ),
+        shaderChainOverrideEnabled = if (has("shaderChainOverrideEnabled")) {
+            optBoolean("shaderChainOverrideEnabled", false)
+        } else {
+            null
+        },
+        shaderChainPreset = optString("shaderChainPreset").trim(),
         enableFxaa = optBoolean("enableFxaa", false),
         casMode = optInt("casMode", 0),
         sgsrMode = optInt("sgsrMode", 0).coerceIn(0, 3),
@@ -406,6 +449,16 @@ private fun PerGameSettings.toJson(): JSONObject {
         if (shouldWrite("mediatekAngleOpenGl")) put("mediatekAngleOpenGl", mediatekAngleOpenGl)
         if (shouldWrite("upscaleMultiplier")) put("upscaleMultiplier", upscaleMultiplier.toDouble())
         if (shouldWrite("aspectRatio")) put("aspectRatio", sanitizeAspectRatioValue(aspectRatio))
+        if (shouldWrite("localMultiplayerMode")) {
+            put("localMultiplayerMode", sanitizeLocalMultiplayerMode(localMultiplayerMode))
+        }
+        if (shouldWrite("displayCrop")) put("displayCrop", JSONObject().apply {
+            val crop = displayCrop.sanitized()
+            put("left", crop.left)
+            put("top", crop.top)
+            put("right", crop.right)
+            put("bottom", crop.bottom)
+        })
         if (shouldWrite("showFps")) put("showFps", showFps)
         if (shouldWrite("fpsOverlayMode")) put("fpsOverlayMode", fpsOverlayMode)
         if (shouldWrite("racingMode")) put("racingMode", racingMode)
@@ -459,6 +512,10 @@ private fun PerGameSettings.toJson(): JSONObject {
         if (shouldWrite("trilinearFiltering")) put("trilinearFiltering", GsHackDefaults.coerceTrilinearFiltering(trilinearFiltering))
         if (shouldWrite("blendingAccuracy")) put("blendingAccuracy", GsHackDefaults.coerceBlendingAccuracy(blendingAccuracy))
         if (shouldWrite("texturePreloading")) put("texturePreloading", GsHackDefaults.coerceTexturePreloading(texturePreloading))
+        shaderChainOverrideEnabled?.let { overrideEnabled ->
+            put("shaderChainOverrideEnabled", overrideEnabled)
+            put("shaderChainPreset", shaderChainPreset.trim())
+        }
         if (shouldWrite("enableFxaa")) put("enableFxaa", enableFxaa)
         if (shouldWrite("casMode")) put("casMode", casMode)
         if (shouldWrite("sgsrMode")) put("sgsrMode", sgsrMode.coerceIn(0, 3))
@@ -618,6 +675,13 @@ private fun sanitizeRendererValue(value: Int): Int {
 
 private fun sanitizeAspectRatioValue(value: Int): Int {
     return if (value in 0..4) value else 1
+}
+
+private fun sanitizeLocalMultiplayerMode(value: Int): Int {
+    return value.coerceIn(
+        AppPreferences.LOCAL_MULTIPLAYER_OFF,
+        AppPreferences.LOCAL_MULTIPLAYER_HORIZONTAL_CROP_SWAPPED
+    )
 }
 
 private fun sanitizeFloatRoundMode(value: Int, fallback: Int): Int {

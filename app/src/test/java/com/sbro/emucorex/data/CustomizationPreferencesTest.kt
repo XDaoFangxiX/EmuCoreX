@@ -21,6 +21,29 @@ class CustomizationPreferencesTest {
         assertEquals(HomeBackgroundType.IMAGE, HomeBackgroundType.fromPreference(1))
         assertEquals(HomeBackgroundType.GIF, HomeBackgroundType.fromPreference(2))
         assertEquals(HomeBackgroundType.VIDEO, HomeBackgroundType.fromPreference(3))
+        assertEquals(HomeBackgroundType.BUILT_IN, HomeBackgroundType.fromPreference(4))
+    }
+
+    @Test
+    fun backgroundPresetFallsBackSafelyAndKeepsStableValues() {
+        assertEquals(HomeBackgroundPreset.OLYMPUS, HomeBackgroundPreset.fromPreference(null))
+        assertEquals(HomeBackgroundPreset.OLYMPUS, HomeBackgroundPreset.fromPreference(99))
+        HomeBackgroundPreset.entries.forEachIndexed { index, preset ->
+            assertEquals(index, preset.preferenceValue)
+            assertEquals(preset, HomeBackgroundPreset.fromPreference(index))
+        }
+    }
+
+    @Test
+    fun sideArtworkKeepsExistingValuesAndResolvesNewPresets() {
+        assertEquals(EmulationSideArtwork.NONE, EmulationSideArtwork.fromPreference(null))
+        assertEquals(EmulationSideArtwork.NONE, EmulationSideArtwork.fromPreference(99))
+        assertEquals(EmulationSideArtwork.CUSTOM, EmulationSideArtwork.fromPreference(5))
+        assertEquals(EmulationSideArtwork.GOTHIC, EmulationSideArtwork.fromPreference(6))
+        assertEquals(EmulationSideArtwork.STEALTH, EmulationSideArtwork.fromPreference(7))
+        assertEquals(EmulationSideArtwork.SAMURAI, EmulationSideArtwork.fromPreference(8))
+        assertEquals(EmulationSideArtwork.WEST_COAST, EmulationSideArtwork.fromPreference(9))
+        assertEquals(EmulationSideArtwork.CRYSTAL, EmulationSideArtwork.fromPreference(10))
     }
 
     @Test

@@ -23,9 +23,12 @@ internal fun calculateOverlayResponsiveScale(
     isLandscape: Boolean
 ): Float {
     val requested = requestedScale.coerceAtLeast(0.01f)
+    val horizontalSafeInset = maxOf(
+        safeLeftInset.value.coerceAtLeast(0f),
+        safeRightInset.value.coerceAtLeast(0f)
+    )
     val availableWidth = (
-        canvasWidth.value - safeLeftInset.value.coerceAtLeast(0f) -
-            safeRightInset.value.coerceAtLeast(0f)
+        canvasWidth.value - horizontalSafeInset * 2f
         ).coerceAtLeast(1f)
     val availableHeight = (
         canvasHeight.value - safeTopInset.value.coerceAtLeast(0f) -
@@ -39,6 +42,7 @@ internal fun calculateOverlayResponsiveScale(
     val rightAnalogWidth = analogBase * rightStickFootprintScale
     val shoulderHeight = if (isLandscape) 32f else 36f
     val centerHeight = if (isLandscape) 26f else 30f
+    val verticalPadding = if (isLandscape) 22f else 16f
     val clusterGap = if (isLandscape) 32f else 34f
     val actionGap = if (isLandscape) 48f else 52f
     val dpadExtent = dpadBase * (2f / 3f) + clusterGap
@@ -56,8 +60,8 @@ internal fun calculateOverlayResponsiveScale(
     } else {
         0f
     }
-    val heightNeeded = shoulderHeight * 2f + 8f + 12f +
-        stackedRightStickHeight + primaryExtent + 12f + centerHeight + 16f
+    val heightNeeded = verticalPadding * 2f + shoulderHeight * 2f + 8f + 12f +
+        stackedRightStickHeight + primaryExtent + 12f + centerHeight
 
     val widthFit = availableWidth / (widthNeeded * requested)
     val heightFit = availableHeight / (heightNeeded * requested)

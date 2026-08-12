@@ -5,20 +5,25 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
-import android.provider.Settings as AndroidSettings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -26,8 +31,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +42,9 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -47,36 +55,38 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Gamepad
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RateReview
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.SaveAs
 import androidx.compose.material.icons.rounded.Schedule
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.ScreenRotation
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SettingsSuggest
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Star
@@ -90,7 +100,6 @@ import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.WarningAmber
-import com.sbro.emucorex.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -98,8 +107,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -121,56 +132,52 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sbro.emucorex.R
-import com.sbro.emucorex.core.DocumentPathResolver
 import com.sbro.emucorex.core.AndroidGyroscopeInput
 import com.sbro.emucorex.core.AudioDefaults
+import com.sbro.emucorex.core.DocumentPathResolver
 import com.sbro.emucorex.core.EmulatorBridge
 import com.sbro.emucorex.core.EmulatorStorage
 import com.sbro.emucorex.core.GamepadManager
 import com.sbro.emucorex.core.GpuDriverCompatibility
 import com.sbro.emucorex.core.GpuHardwareProfiles
+import com.sbro.emucorex.core.LocalTvUiEnvironment
 import com.sbro.emucorex.core.PerformanceProfiles
 import com.sbro.emucorex.core.ProPurchaseTier
-import com.sbro.emucorex.core.availableProSupportOffers
-import com.sbro.emucorex.core.LocalTvUiEnvironment
 import com.sbro.emucorex.core.TvInterfaceMode
 import com.sbro.emucorex.core.TvUiPolicy
+import com.sbro.emucorex.core.availableProSupportOffers
 import com.sbro.emucorex.core.buildUpscaleOptions
 import com.sbro.emucorex.core.upscaleKeyToMultiplier
 import com.sbro.emucorex.core.upscaleMultiplierValue
-import com.sbro.emucorex.ui.common.TvStoragePickerHost
-import com.sbro.emucorex.ui.common.TvStorageRequest
-import com.sbro.emucorex.ui.common.ProSupportOptionsDialog
-import com.sbro.emucorex.ui.common.tvFocusGroup
-import com.sbro.emucorex.core.utils.NetworkAdapterCollector
-import com.sbro.emucorex.data.AppPreferences
 import com.sbro.emucorex.data.AppFontChoice
+import com.sbro.emucorex.data.AppPreferences
 import com.sbro.emucorex.data.AppPreferences.Companion.FPS_OVERLAY_MODE_DETAILED
 import com.sbro.emucorex.data.AppPreferences.Companion.FPS_OVERLAY_MODE_SIMPLE
 import com.sbro.emucorex.data.CheatRepository
@@ -178,45 +185,60 @@ import com.sbro.emucorex.data.CoverArtRepository
 import com.sbro.emucorex.data.CustomThemeConfig
 import com.sbro.emucorex.data.CustomThemeLibrary
 import com.sbro.emucorex.data.CustomTouchControlLibrary
+import com.sbro.emucorex.data.DisplayCrop
+import com.sbro.emucorex.data.DrawerItemId
+import com.sbro.emucorex.data.DrawerVisualStyle
+import com.sbro.emucorex.data.EmulationSideArtwork
+import com.sbro.emucorex.data.EmulationSideArtworkRepository
+import com.sbro.emucorex.data.GameMenuLayoutStyle
+import com.sbro.emucorex.data.GameMenuSectionId
+import com.sbro.emucorex.data.GameMenuTabId
+import com.sbro.emucorex.data.HomeBackgroundPreset
 import com.sbro.emucorex.data.HomeBackgroundRepository
 import com.sbro.emucorex.data.HomeBackgroundType
-import com.sbro.emucorex.data.TouchControlVisualStyle
-import com.sbro.emucorex.data.TouchControlPressEffect
-import com.sbro.emucorex.data.DrawerItemId
-import com.sbro.emucorex.data.GameMenuTabId
-import com.sbro.emucorex.data.GameMenuSectionId
-import com.sbro.emucorex.data.GameMenuLayoutStyle
-import com.sbro.emucorex.data.DrawerVisualStyle
 import com.sbro.emucorex.data.MemoryCardRepository
 import com.sbro.emucorex.data.OverlayLayoutSnapshot
-import com.sbro.emucorex.data.PerformanceOverlayMetrics
 import com.sbro.emucorex.data.PerGameSettingsRepository
+import com.sbro.emucorex.data.PerformanceOverlayMetrics
+import com.sbro.emucorex.data.RetroArchShaderPreset
 import com.sbro.emucorex.data.SettingsBackupRepository
 import com.sbro.emucorex.data.SettingsSnapshot
+import com.sbro.emucorex.data.ShaderPackInstallStage
+import com.sbro.emucorex.data.TouchControlPressEffect
+import com.sbro.emucorex.data.TouchControlVisualStyle
+import com.sbro.emucorex.data.formatDownloadBytes
+import com.sbro.emucorex.ui.common.EmulationSideArtworkOverlay
+import com.sbro.emucorex.ui.common.EmulationSideArtworkThumbnail
 import com.sbro.emucorex.ui.common.EmulatorDataLocationDialog
-import com.sbro.emucorex.ui.home.calculateHomeGridColumnCount
 import com.sbro.emucorex.ui.common.NavigationBackButton
+import com.sbro.emucorex.ui.common.ProSupportOptionsDialog
 import com.sbro.emucorex.ui.common.ProvideGamepadShoulderActions
-import com.sbro.emucorex.ui.common.ScrollableFilterTabRow
 import com.sbro.emucorex.ui.common.RequestFocusOnResume
 import com.sbro.emucorex.ui.common.ScreenTopBar
+import com.sbro.emucorex.ui.common.ScrollableFilterTabRow
 import com.sbro.emucorex.ui.common.SettingHelpButton
 import com.sbro.emucorex.ui.common.SettingsStyledDialog
+import com.sbro.emucorex.ui.common.TvStoragePickerHost
+import com.sbro.emucorex.ui.common.TvStorageRequest
+import com.sbro.emucorex.ui.common.VectorAnalogStick
+import com.sbro.emucorex.ui.common.VectorOverlayButton
+import com.sbro.emucorex.ui.common.appScreenTopPadding
+import com.sbro.emucorex.ui.common.calculateSideArtworkPreviewLayout
 import com.sbro.emucorex.ui.common.gamepadFocusableCard
-import com.sbro.emucorex.ui.common.tvGamepadFocusableCard
 import com.sbro.emucorex.ui.common.navigationBarsHorizontalPaddingValues
 import com.sbro.emucorex.ui.common.rememberDebouncedClick
-import com.sbro.emucorex.ui.common.VectorOverlayButton
-import com.sbro.emucorex.ui.common.VectorAnalogStick
-import com.sbro.emucorex.ui.common.appScreenTopPadding
 import com.sbro.emucorex.ui.common.skipGamepadTextFieldFocus
+import com.sbro.emucorex.ui.common.tvFocusGroup
+import com.sbro.emucorex.ui.common.tvGamepadFocusableCard
 import com.sbro.emucorex.ui.customization.HomeBackgroundMedia
+import com.sbro.emucorex.ui.home.calculateHomeGridColumnCount
 import com.sbro.emucorex.ui.theme.ScreenHorizontalPadding
 import com.sbro.emucorex.ui.theme.ThemeMode
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
+import com.sbro.emucorex.ui.common.AppAlertDialog as AlertDialog
 
 private enum class SettingsTab {
     General, Graphics, Controls, Emulation, Audio, Fixes, Library, Network, Customization, GameMenu, Updates, Pro, About
@@ -234,6 +256,7 @@ fun SettingsScreen(
     onOpenControlsLayoutEditor: (() -> Unit)? = null,
     onOpenThemeManager: (() -> Unit)? = null,
     onOpenTouchControlCreator: (() -> Unit)? = null,
+    onOpenNetworkModes: (() -> Unit)? = null,
     viewModel: SettingsViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -289,6 +312,12 @@ fun SettingsScreen(
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         viewModel.clearCustomizationMessage()
     }
+    val shaderPackMessage = uiState.shaderPackMessageResId?.let { stringResource(it) }
+    LaunchedEffect(shaderPackMessage) {
+        val message = shaderPackMessage ?: return@LaunchedEffect
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        viewModel.clearShaderPackMessage()
+    }
 
     if (!uiState.isLoaded) {
         Box(
@@ -318,9 +347,17 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? -> uri?.let(viewModel::installHomeBackground) }
 
+    val sideArtworkPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? -> uri?.let(viewModel::installEmulationSideArtwork) }
+
     val customFontPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? -> uri?.let(viewModel::installCustomFont) }
+
+    val shaderPackPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? -> uri?.let(viewModel::importShaderPack) }
 
     var tvStorageRequest by remember { mutableStateOf<TvStorageRequest?>(null) }
     TvStoragePickerHost(
@@ -485,6 +522,9 @@ fun SettingsScreen(
                 launchHomeBackgroundPicker = {
                     homeBackgroundPicker.launch(arrayOf("image/*", "video/*"))
                 },
+                launchSideArtworkPicker = {
+                    sideArtworkPicker.launch(arrayOf("image/*"))
+                },
                 launchCustomFontPicker = {
                     customFontPicker.launch(
                         arrayOf(
@@ -496,6 +536,9 @@ fun SettingsScreen(
                             "application/octet-stream"
                         )
                     )
+                },
+                launchShaderPackPicker = {
+                    shaderPackPicker.launch(arrayOf("application/zip", "application/octet-stream"))
                 },
                 onOpenCoverUrlEditor = {
                     pendingCoverUrl.value = uiState.coverDownloadBaseUrl.orEmpty()
@@ -524,6 +567,7 @@ fun SettingsScreen(
                 onOpenControlsLayoutEditor = onOpenControlsLayoutEditor,
                 onOpenThemeManager = onOpenThemeManager,
                 onOpenTouchControlCreator = onOpenTouchControlCreator,
+                onOpenNetworkModes = onOpenNetworkModes,
                 viewModel = viewModel,
                 topInset = 0.dp,
                 modifier = Modifier
@@ -1043,7 +1087,9 @@ private fun SettingsContent(
     launchGamePicker: () -> Unit,
     openEmulatorDataLocationDialog: () -> Unit,
     launchHomeBackgroundPicker: () -> Unit,
+    launchSideArtworkPicker: () -> Unit,
     launchCustomFontPicker: () -> Unit,
+    launchShaderPackPicker: () -> Unit,
     onOpenCoverUrlEditor: () -> Unit,
     onClearCoverCache: () -> Unit,
     launchSettingsBackupExport: () -> Unit,
@@ -1059,7 +1105,8 @@ private fun SettingsContent(
     onOpenGameDbBrowser: (() -> Unit)? = null,
     onOpenControlsLayoutEditor: (() -> Unit)? = null,
     onOpenThemeManager: (() -> Unit)? = null,
-    onOpenTouchControlCreator: (() -> Unit)? = null
+    onOpenTouchControlCreator: (() -> Unit)? = null,
+    onOpenNetworkModes: (() -> Unit)? = null
 ) {
     val gamepadActions = remember { GamepadManager.mappableButtonActions() }
     val defaults = remember { SettingsSnapshot() }
@@ -1241,6 +1288,7 @@ private fun SettingsContent(
                     CustomizationSettingsTab(
                         uiState = uiState,
                         onPickBackground = launchHomeBackgroundPicker,
+                        onPickSideArtwork = launchSideArtworkPicker,
                         onPickCustomFont = launchCustomFontPicker,
                         onOpenTouchControlCreator = onOpenTouchControlCreator,
                         viewModel = viewModel
@@ -1313,6 +1361,131 @@ private fun SettingsContent(
                             onSelect = viewModel::setAspectRatio,
                             helpText = stringResource(R.string.settings_help_aspect_ratio),
                             onResetToDefault = { viewModel.setAspectRatio(defaults.aspectRatio) }
+                        )
+                        ChoiceSection(
+                            title = stringResource(R.string.emulation_local_multiplayer_title),
+                            options = listOf(
+                                AppPreferences.LOCAL_MULTIPLAYER_OFF to stringResource(R.string.emulation_local_multiplayer_off),
+                                AppPreferences.LOCAL_MULTIPLAYER_SIDE_BY_SIDE to stringResource(R.string.emulation_local_multiplayer_side_by_side),
+                                AppPreferences.LOCAL_MULTIPLAYER_STACKED to stringResource(R.string.emulation_local_multiplayer_stacked),
+                                AppPreferences.LOCAL_MULTIPLAYER_HORIZONTAL_CROP to stringResource(R.string.emulation_local_multiplayer_crop),
+                                AppPreferences.LOCAL_MULTIPLAYER_HORIZONTAL_CROP_SWAPPED to stringResource(R.string.emulation_local_multiplayer_crop_swapped)
+                            ),
+                            selectedValue = uiState.localMultiplayerMode,
+                            onSelect = viewModel::setLocalMultiplayerMode,
+                            helpText = stringResource(R.string.emulation_local_multiplayer_help),
+                            onResetToDefault = {
+                                viewModel.setLocalMultiplayerMode(AppPreferences.LOCAL_MULTIPLAYER_OFF)
+                            }
+                        )
+                        val crop = uiState.displayCrop
+                        val cropPreset = when (crop) {
+                            DisplayCrop.None -> 0
+                            DisplayCrop.ThinEdges -> 2
+                            DisplayCrop.SafeEdges -> 4
+                            else -> -1
+                        }
+                        ChoiceSection(
+                            title = stringResource(R.string.settings_display_crop),
+                            options = listOf(
+                                0 to stringResource(R.string.settings_display_crop_off),
+                                2 to stringResource(R.string.settings_display_crop_thin),
+                                4 to stringResource(R.string.settings_display_crop_safe),
+                                -1 to stringResource(R.string.settings_display_crop_custom)
+                            ),
+                            selectedValue = cropPreset,
+                            onSelect = { preset ->
+                                when (preset) {
+                                    0 -> viewModel.setDisplayCrop(DisplayCrop.None)
+                                    2 -> viewModel.setDisplayCrop(DisplayCrop.ThinEdges)
+                                    4 -> viewModel.setDisplayCrop(DisplayCrop.SafeEdges)
+                                }
+                            },
+                            helpText = stringResource(R.string.settings_help_display_crop),
+                            onResetToDefault = { viewModel.setDisplayCrop(DisplayCrop.None) }
+                        )
+                        listOf(
+                            Triple(R.string.settings_display_crop_left, crop.left) { value: Int -> crop.copy(left = value) },
+                            Triple(R.string.settings_display_crop_top, crop.top) { value: Int -> crop.copy(top = value) },
+                            Triple(R.string.settings_display_crop_right, crop.right) { value: Int -> crop.copy(right = value) },
+                            Triple(R.string.settings_display_crop_bottom, crop.bottom) { value: Int -> crop.copy(bottom = value) }
+                        ).forEach { (titleRes, pixels, update) ->
+                            val pixelsUnit = stringResource(R.string.settings_display_crop_pixels_unit)
+                            SliderItem(
+                                icon = Icons.Rounded.Tune,
+                                title = stringResource(titleRes),
+                                subtitle = "$pixels $pixelsUnit",
+                                value = pixels.toFloat(),
+                                range = DisplayCrop.MIN_PIXELS.toFloat()..DisplayCrop.MAX_PIXELS.toFloat(),
+                                steps = DisplayCrop.MAX_PIXELS - DisplayCrop.MIN_PIXELS - 1,
+                                onValueChange = { viewModel.setDisplayCrop(update(it.roundToInt())) },
+                                valueLabel = { "${it.roundToInt()} $pixelsUnit" },
+                                onResetToDefault = { viewModel.setDisplayCrop(update(0)) }
+                            )
+                        }
+                        ToggleItem(
+                            icon = Icons.Rounded.AutoFixHigh,
+                            title = stringResource(R.string.settings_retroarch_shaders),
+                            subtitle = stringResource(R.string.settings_retroarch_shaders_desc),
+                            checked = uiState.shaderChainEnabled,
+                            onCheckedChange = viewModel::setShaderChainEnabled,
+                            helpText = stringResource(R.string.settings_help_retroarch_shaders),
+                            onResetToDefault = { viewModel.setShaderChainEnabled(false) }
+                        )
+                        ShaderPresetSelector(
+                            title = stringResource(R.string.settings_shader_preset),
+                            presets = uiState.shaderPresets,
+                            selectedPath = uiState.shaderChainPreset,
+                            onSelect = viewModel::setShaderChainPreset,
+                            helpText = stringResource(R.string.settings_help_shader_preset),
+                        )
+                        SettingsItem(
+                            icon = if (uiState.isShaderPackInstalled) {
+                                Icons.Rounded.CheckCircle
+                            } else {
+                                Icons.Rounded.SystemUpdateAlt
+                            },
+                            label = stringResource(R.string.settings_shader_pack_download),
+                            value = if (
+                                uiState.isShaderPackBusy &&
+                                uiState.shaderPackProgress?.stage == ShaderPackInstallStage.DOWNLOADING
+                            ) {
+                                stringResource(R.string.texture_download_status_downloading)
+                            } else if (uiState.isShaderPackBusy) {
+                                stringResource(R.string.settings_shader_pack_working)
+                            } else if (uiState.isShaderPackInstalled) {
+                                stringResource(R.string.settings_shader_pack_installed)
+                            } else {
+                                stringResource(R.string.settings_shader_pack_download_desc)
+                            },
+                            onClick = viewModel::downloadOfficialShaderPack,
+                            enabled = !uiState.isShaderPackBusy && !uiState.isShaderPackInstalled,
+                            progressVisible = uiState.isShaderPackBusy,
+                            progress = uiState.shaderPackProgress?.fraction,
+                            progressLabel = uiState.shaderPackProgress
+                                ?.takeIf {
+                                    it.stage == ShaderPackInstallStage.DOWNLOADING &&
+                                        it.downloadedBytes > 0L
+                                }
+                                ?.let { progress ->
+                                    val downloaded = formatDownloadBytes(progress.downloadedBytes)
+                                    if (progress.totalBytes > 0L) {
+                                        val percent = ((progress.fraction ?: 0f) * 100f).roundToInt()
+                                        val status = stringResource(
+                                            R.string.content_downloading_percent,
+                                            percent
+                                        )
+                                        "$status · $downloaded / ${formatDownloadBytes(progress.totalBytes)}"
+                                    } else {
+                                        downloaded
+                                    }
+                                }
+                        )
+                        SettingsItem(
+                            icon = Icons.Rounded.FolderOpen,
+                            label = stringResource(R.string.settings_shader_pack_import),
+                            value = stringResource(R.string.settings_shader_pack_import_desc),
+                            onClick = launchShaderPackPicker
                         )
                         ChoiceSection(
                             title = stringResource(R.string.settings_anisotropic_filtering),
@@ -2619,20 +2792,6 @@ private fun SettingsContent(
                             onResetToDefault = { viewModel.setEnableFastCdvd(defaults.enableFastCdvd) }
                         )
                     }
-                    SettingsSection(title = stringResource(R.string.settings_cheats_tab)) {
-                        ToggleItem(
-                            icon = Icons.Rounded.Star,
-                            title = stringResource(R.string.settings_enable_cheats),
-                            subtitle = stringResource(R.string.settings_enable_cheats_desc),
-                            checked = uiState.enableCheats,
-                            onCheckedChange = viewModel::setEnableCheats,
-                            helpText = stringResource(R.string.settings_help_cheats),
-                            onResetToDefault = { viewModel.setEnableCheats(defaults.enableCheats) }
-                        )
-                        SettingsInlineNote(
-                            text = stringResource(R.string.settings_cheats_note)
-                        )
-                    }
                 }
 
                 SettingsTab.Fixes -> {
@@ -2938,7 +3097,19 @@ private fun SettingsContent(
                 }
 
                 SettingsTab.Network -> {
-                    NetworkSettingsTab(uiState, context, defaults, viewModel)
+                    SettingsSection(title = stringResource(R.string.settings_network_tab)) {
+                        SettingsItem(
+                            icon = Icons.Rounded.Link,
+                            label = stringResource(R.string.network_hub_title),
+                            value = stringResource(R.string.network_hub_entry_desc),
+                            helpText = stringResource(R.string.network_hub_entry_help),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.68f)
+                            ),
+                            onClick = { onOpenNetworkModes?.invoke() }
+                        )
+                    }
                 }
 
                 SettingsTab.Pro -> {
@@ -3021,9 +3192,25 @@ private fun SettingsContent(
 }
 
 @Composable
+private fun homeBackgroundPresetLabel(preset: HomeBackgroundPreset): String = stringResource(
+    when (preset) {
+        HomeBackgroundPreset.OLYMPUS -> R.string.settings_customization_background_preset_olympus
+        HomeBackgroundPreset.NEON_RACING -> R.string.settings_customization_background_preset_neon_racing
+        HomeBackgroundPreset.TROPICAL_RUINS -> R.string.settings_customization_background_preset_tropical_ruins
+        HomeBackgroundPreset.COLOSSUS_VALLEY -> R.string.settings_customization_background_preset_colossus_valley
+        HomeBackgroundPreset.STEALTH_JUNGLE -> R.string.settings_customization_background_preset_stealth_jungle
+        HomeBackgroundPreset.GOTHIC_CITY -> R.string.settings_customization_background_preset_gothic_city
+        HomeBackgroundPreset.WEST_COAST -> R.string.settings_customization_background_preset_west_coast
+        HomeBackgroundPreset.SAMURAI_NIGHT -> R.string.settings_customization_background_preset_samurai_night
+        HomeBackgroundPreset.CRYSTAL_PILGRIMAGE -> R.string.settings_customization_background_preset_crystal_pilgrimage
+    }
+)
+
+@Composable
 private fun CustomizationSettingsTab(
     uiState: SettingsUiState,
     onPickBackground: () -> Unit,
+    onPickSideArtwork: () -> Unit,
     onPickCustomFont: () -> Unit,
     onOpenTouchControlCreator: (() -> Unit)?,
     viewModel: SettingsViewModel
@@ -3039,13 +3226,33 @@ private fun CustomizationSettingsTab(
         smallestScreenWidthDp = minOf(windowWidthDp, windowHeightDp),
         gridScale = uiState.homeGridScale
     )
+    val sideArtworkPreviewLayout = calculateSideArtworkPreviewLayout(windowWidthDp, windowHeightDp)
     val backgroundRepository = remember(context) { HomeBackgroundRepository(context) }
+    val sideArtworkRepository = remember(context) { EmulationSideArtworkRepository(context) }
     val backgroundFile = backgroundRepository.existingFile(uiState.homeBackgroundType)
     val backgroundLabel = when (uiState.homeBackgroundType) {
         HomeBackgroundType.NONE -> stringResource(R.string.settings_customization_background_none)
         HomeBackgroundType.IMAGE -> stringResource(R.string.settings_customization_background_image)
         HomeBackgroundType.GIF -> stringResource(R.string.settings_customization_background_gif)
         HomeBackgroundType.VIDEO -> stringResource(R.string.settings_customization_background_video)
+        HomeBackgroundType.BUILT_IN -> homeBackgroundPresetLabel(uiState.homeBackgroundPreset)
+    }
+    val hasCustomSideArtwork = sideArtworkRepository.existingCustomFile() != null
+    val sideArtworkOptions = listOf(
+        EmulationSideArtwork.NONE.preferenceValue to stringResource(R.string.settings_customization_side_artwork_none),
+        EmulationSideArtwork.OLYMPUS.preferenceValue to stringResource(R.string.settings_customization_side_artwork_olympus),
+        EmulationSideArtwork.NIGHT_RACING.preferenceValue to stringResource(R.string.settings_customization_side_artwork_night_racing),
+        EmulationSideArtwork.JUNGLE.preferenceValue to stringResource(R.string.settings_customization_side_artwork_jungle),
+        EmulationSideArtwork.COLOSSUS.preferenceValue to stringResource(R.string.settings_customization_side_artwork_colossus),
+        EmulationSideArtwork.GOTHIC.preferenceValue to stringResource(R.string.settings_customization_side_artwork_gothic),
+        EmulationSideArtwork.STEALTH.preferenceValue to stringResource(R.string.settings_customization_side_artwork_stealth),
+        EmulationSideArtwork.SAMURAI.preferenceValue to stringResource(R.string.settings_customization_side_artwork_samurai),
+        EmulationSideArtwork.WEST_COAST.preferenceValue to stringResource(R.string.settings_customization_side_artwork_west_coast),
+        EmulationSideArtwork.CRYSTAL.preferenceValue to stringResource(R.string.settings_customization_side_artwork_crystal)
+    ) + if (hasCustomSideArtwork) {
+        listOf(EmulationSideArtwork.CUSTOM.preferenceValue to stringResource(R.string.settings_customization_side_artwork_custom))
+    } else {
+        emptyList()
     }
 
     SettingsSection(title = stringResource(R.string.settings_customization_preview)) {
@@ -3062,6 +3269,7 @@ private fun CustomizationSettingsTab(
                 HomeBackgroundMedia(
                     type = uiState.homeBackgroundType,
                     file = backgroundFile,
+                    preset = uiState.homeBackgroundPreset,
                     revision = uiState.homeBackgroundRevision,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -3082,21 +3290,16 @@ private fun CustomizationSettingsTab(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = stringResource(R.string.settings_customization_preview_caption),
+                            text = stringResource(R.string.app_name),
                             modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.78f),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onBackground,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -3120,6 +3323,14 @@ private fun CustomizationSettingsTab(
                             )
                         }
                     }
+                    Text(
+                        text = stringResource(R.string.settings_customization_preview_caption),
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.78f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Row(
                         modifier = Modifier
                             .weight(1f)
@@ -3183,6 +3394,64 @@ private fun CustomizationSettingsTab(
     }
 
     SettingsSection(title = stringResource(R.string.settings_customization_background_section)) {
+        Text(
+            text = stringResource(R.string.settings_customization_background_presets),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(HomeBackgroundPreset.entries, key = { it.preferenceValue }) { preset ->
+                val selected = uiState.homeBackgroundType == HomeBackgroundType.BUILT_IN &&
+                    uiState.homeBackgroundPreset == preset
+                Surface(
+                    modifier = Modifier
+                        .width(156.dp)
+                        .aspectRatio(16f / 9f)
+                        .clickable { viewModel.setHomeBackgroundPreset(preset) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(
+                        if (selected) 2.dp else 1.dp,
+                        if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outlineVariant
+                    )
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        HomeBackgroundMedia(
+                            type = HomeBackgroundType.BUILT_IN,
+                            file = null,
+                            preset = preset,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        0.35f to Color.Transparent,
+                                        1f to Color.Black.copy(alpha = 0.82f)
+                                    )
+                                )
+                        )
+                        Text(
+                            text = homeBackgroundPresetLabel(preset),
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
         SettingsItem(
             icon = Icons.Rounded.Wallpaper,
             label = stringResource(R.string.settings_customization_background),
@@ -3209,6 +3478,115 @@ private fun CustomizationSettingsTab(
                 label = stringResource(R.string.settings_customization_remove_background),
                 value = stringResource(R.string.settings_customization_remove_background_desc),
                 onClick = viewModel::clearHomeBackground
+            )
+        }
+    }
+
+    SettingsSection(title = stringResource(R.string.settings_customization_side_artwork_section)) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(sideArtworkPreviewLayout.heightDp.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = Color.Black,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                EmulationSideArtworkOverlay(
+                    artwork = uiState.emulationSideArtwork,
+                    revision = uiState.emulationSideArtworkRevision,
+                    aspectRatioMode = 2,
+                    modifier = Modifier.fillMaxSize(),
+                    preview = true,
+                    previewContentFraction = sideArtworkPreviewLayout.contentFraction,
+                    dimPercent = uiState.emulationSideArtworkDim
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(sideArtworkPreviewLayout.contentFraction)
+                        .align(Alignment.Center)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF071A33), Color(0xFF142B46), Color(0xFF301B46), Color(0xFF081524))
+                            )
+                        )
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(Color(0xFF4A86E8).copy(alpha = 0.24f), Color.Transparent)
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Gamepad,
+                            contentDescription = null,
+                            modifier = Modifier.size(30.dp),
+                            tint = Color.White.copy(alpha = 0.72f)
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_customization_side_artwork_preview),
+                            textAlign = TextAlign.Center,
+                            color = Color.White.copy(alpha = 0.88f),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+                if (uiState.isSideArtworkImporting) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.45f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+            }
+        }
+        SideArtworkPicker(
+            title = stringResource(R.string.settings_customization_side_artwork),
+            options = sideArtworkOptions,
+            selectedValue = uiState.emulationSideArtwork.preferenceValue,
+            revision = uiState.emulationSideArtworkRevision,
+            onSelect = { value ->
+                viewModel.setEmulationSideArtwork(EmulationSideArtwork.fromPreference(value))
+            },
+            helpText = stringResource(R.string.settings_customization_side_artwork_help)
+        )
+        if (uiState.emulationSideArtwork != EmulationSideArtwork.NONE) {
+            SliderItem(
+                icon = Icons.Rounded.Visibility,
+                title = stringResource(R.string.settings_customization_background_dim),
+                subtitle = "",
+                value = uiState.emulationSideArtworkDim.toFloat(),
+                range = 0f..85f,
+                steps = 16,
+                onValueChange = { viewModel.setEmulationSideArtworkDim(it.roundToInt()) },
+                valueLabel = { "${it.roundToInt()}%" },
+                onResetToDefault = {
+                    viewModel.setEmulationSideArtworkDim(AppPreferences.DEFAULT_EMULATION_SIDE_ARTWORK_DIM)
+                }
+            )
+        }
+        SettingsItem(
+            icon = Icons.Rounded.Wallpaper,
+            label = stringResource(R.string.settings_customization_side_artwork_import),
+            value = stringResource(R.string.settings_customization_side_artwork_import_desc),
+            onClick = onPickSideArtwork
+        )
+        if (hasCustomSideArtwork) {
+            SettingsItem(
+                icon = Icons.Rounded.DeleteOutline,
+                label = stringResource(R.string.settings_customization_side_artwork_remove),
+                value = stringResource(R.string.settings_customization_side_artwork_remove_desc),
+                onClick = viewModel::clearCustomEmulationSideArtwork
             )
         }
     }
@@ -3916,7 +4294,7 @@ private fun drawerItemLabel(item: DrawerItemId): String = when (item) {
     DrawerItemId.APP_SETTINGS -> stringResource(R.string.shell_app_settings)
     DrawerItemId.SUPPORTED_FORMATS -> stringResource(R.string.shell_supported_formats)
     DrawerItemId.FEEDBACK -> stringResource(R.string.feedback_title)
-    DrawerItemId.DISCORD -> stringResource(R.string.shell_discord_server)
+    DrawerItemId.DISCORD -> stringResource(R.string.discord_title)
 }
 
 @Composable
@@ -4024,295 +4402,6 @@ private fun gameMenuSectionLabel(section: GameMenuSectionId): String = when (sec
     GameMenuSectionId.FIXES_HARDWARE -> stringResource(R.string.settings_hardware_fixes)
     GameMenuSectionId.FIXES_UPSCALING -> stringResource(R.string.settings_upscaling_fixes)
     GameMenuSectionId.ACHIEVEMENTS_PROGRESS -> stringResource(R.string.emulation_achievements_tab)
-}
-
-@Composable
-private fun NetworkSettingsTab(
-    uiState: SettingsUiState,
-    context: android.content.Context,
-    defaults: SettingsSnapshot,
-    viewModel: SettingsViewModel
-) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var adapterRefreshKey by remember { mutableIntStateOf(0) }
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) adapterRefreshKey++
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-    val adapters = remember(context, adapterRefreshKey) {
-        NetworkAdapterCollector.collectAdapters(context)
-            .filter { adapter ->
-                adapter.isUp && !adapter.isLoopback && adapter.ipAddresses.any { !it.contains(':') }
-            }
-    }
-    val devices = remember(adapters, uiState.dev9EthernetDevice) {
-        buildList {
-            add("Auto" to "Auto")
-            adapters.forEach { adapter ->
-                add(adapter.name to "${adapter.displayName} (${adapter.name})")
-            }
-            if (uiState.dev9EthernetDevice != "Auto" && none { it.first == uiState.dev9EthernetDevice }) {
-                add(uiState.dev9EthernetDevice to uiState.dev9EthernetDevice)
-            }
-        }.distinctBy { it.first }
-    }
-    val dnsModes = listOf(
-        AppPreferences.DEV9_DNS_MODE_AUTO to stringResource(R.string.settings_network_dns_mode_auto),
-        AppPreferences.DEV9_DNS_MODE_MANUAL to stringResource(R.string.settings_network_dns_mode_manual),
-        AppPreferences.DEV9_DNS_MODE_INTERNAL to stringResource(R.string.settings_network_dns_mode_internal)
-    )
-    val localAddresses: List<String> = remember(adapters) {
-        adapters.asSequence()
-            .filterNot { it.displayName == "VPN" || it.displayName == "Mobile data" }
-            .flatMap { it.ipAddresses.asSequence() }
-            .filter(::isPrivateIpv4)
-            .distinct()
-            .toList()
-    }
-
-    SettingsSection(title = stringResource(R.string.settings_network_tab)) {
-        SettingsInlineNote(stringResource(R.string.settings_network_summary))
-        val localLinkActive = uiState.dev9LocalLinkMode != AppPreferences.DEV9_LOCAL_LINK_OFF
-        ToggleItem(
-            icon = Icons.Rounded.Link,
-            title = stringResource(R.string.settings_network_enable),
-            subtitle = stringResource(R.string.settings_network_enable_desc),
-            checked = uiState.dev9EthernetEnabled || localLinkActive,
-            onCheckedChange = { enabled ->
-                viewModel.setDev9EthernetEnabled(enabled || localLinkActive)
-            },
-            helpText = stringResource(R.string.settings_network_enable_help),
-            onResetToDefault = {
-                viewModel.setDev9EthernetEnabled(defaults.dev9EthernetEnabled || localLinkActive)
-            }
-        )
-        ChoiceSection(
-            title = stringResource(R.string.settings_network_mode),
-            options = listOf(
-                AppPreferences.DEV9_LOCAL_LINK_OFF to stringResource(R.string.settings_network_mode_online),
-                AppPreferences.DEV9_LOCAL_LINK_HOST to stringResource(R.string.settings_network_mode_local_host),
-                AppPreferences.DEV9_LOCAL_LINK_JOIN to stringResource(R.string.settings_network_mode_local_join)
-            ),
-            selectedValue = uiState.dev9LocalLinkMode,
-            onSelect = viewModel::setDev9LocalLinkMode,
-            helpText = stringResource(R.string.settings_network_mode_help),
-            onResetToDefault = { viewModel.setDev9LocalLinkMode(defaults.dev9LocalLinkMode) }
-        )
-        if (uiState.dev9LocalLinkMode == AppPreferences.DEV9_LOCAL_LINK_OFF) {
-            SettingsItem(
-                icon = Icons.Rounded.Link,
-                label = stringResource(R.string.settings_network_api),
-                value = stringResource(R.string.settings_network_api_sockets),
-                onClick = {}
-            )
-            ChoiceSection(
-                title = stringResource(R.string.settings_network_adapter),
-                options = devices.mapIndexed { index, (_, label) -> index to label },
-                selectedValue = devices.indexOfFirst { it.first == uiState.dev9EthernetDevice }.coerceAtLeast(0),
-                onSelect = { index -> devices.getOrNull(index)?.first?.let(viewModel::setDev9EthernetDevice) },
-                helpText = stringResource(R.string.settings_network_adapter_help),
-                onResetToDefault = { viewModel.setDev9EthernetDevice(defaults.dev9EthernetDevice) }
-            )
-        } else {
-            SettingsInlineNote(stringResource(R.string.settings_network_local_summary))
-            SettingsItem(
-                icon = Icons.Rounded.Link,
-                label = stringResource(R.string.settings_network_open_wifi_settings),
-                value = stringResource(R.string.settings_network_open_wifi_settings_desc),
-                onClick = {
-                    runCatching { context.startActivity(Intent(AndroidSettings.ACTION_WIRELESS_SETTINGS)) }
-                }
-            )
-            if (uiState.dev9LocalLinkMode == AppPreferences.DEV9_LOCAL_LINK_HOST) {
-                SettingsInlineNote(
-                    stringResource(
-                        R.string.settings_network_local_host_addresses,
-                        localAddresses.joinToString().ifBlank { stringResource(R.string.settings_network_local_no_address) }
-                    )
-                )
-            } else {
-                var hostDraft by remember(uiState.dev9LocalLinkAddress) { mutableStateOf(uiState.dev9LocalLinkAddress) }
-                val hostValid = remember(hostDraft) { isValidIpv4(hostDraft) }
-                OutlinedTextField(
-                    value = hostDraft,
-                    onValueChange = { value ->
-                        hostDraft = value.filter { it.isDigit() || it == '.' }.take(15)
-                        if (isValidIpv4(hostDraft)) viewModel.setDev9LocalLinkAddress(hostDraft)
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).skipGamepadTextFieldFocus(),
-                    label = { Text(stringResource(R.string.settings_network_local_host_address)) },
-                    supportingText = { Text(stringResource(R.string.settings_network_local_host_address_desc)) },
-                    isError = !hostValid,
-                    singleLine = true
-                )
-            }
-            var portDraft by remember(uiState.dev9LocalLinkPort) { mutableStateOf(uiState.dev9LocalLinkPort.toString()) }
-            val portValid = portDraft.toIntOrNull() in 1024..65535
-            OutlinedTextField(
-                value = portDraft,
-                onValueChange = { value ->
-                    portDraft = value.filter(Char::isDigit).take(5)
-                    portDraft.toIntOrNull()?.takeIf { it in 1024..65535 }?.let(viewModel::setDev9LocalLinkPort)
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).skipGamepadTextFieldFocus(),
-                label = { Text(stringResource(R.string.settings_network_local_port)) },
-                supportingText = { Text(stringResource(R.string.settings_network_local_port_desc)) },
-                isError = !portValid,
-                singleLine = true
-            )
-            var roomDraft by remember(uiState.dev9LocalLinkRoomCode) { mutableStateOf(uiState.dev9LocalLinkRoomCode) }
-            val roomValid = roomDraft.length in 4..12
-            OutlinedTextField(
-                value = roomDraft,
-                onValueChange = { value ->
-                    roomDraft = value.filter(Char::isLetterOrDigit).take(12).uppercase()
-                    viewModel.setDev9LocalLinkRoomCode(roomDraft)
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).skipGamepadTextFieldFocus(),
-                label = { Text(stringResource(R.string.settings_network_local_room_code)) },
-                supportingText = { Text(stringResource(R.string.settings_network_local_room_code_desc)) },
-                isError = !roomValid,
-                singleLine = true
-            )
-            SettingsInlineNote(stringResource(R.string.settings_network_local_peer_id, uiState.dev9LocalLinkPeerId))
-            SettingsInlineNote(stringResource(R.string.settings_network_local_compatibility_note))
-        }
-        if (uiState.dev9LocalLinkMode == AppPreferences.DEV9_LOCAL_LINK_OFF) {
-        ChoiceSection(
-            title = stringResource(R.string.settings_network_dns_preset),
-            options = listOf(
-                0 to stringResource(R.string.settings_network_dns_preset_system),
-                1 to stringResource(R.string.settings_network_dns_preset_ps2online),
-                2 to stringResource(R.string.settings_network_dns_preset_psrewired)
-            ),
-            selectedValue = when (uiState.dev9Dns1Mode) {
-                AppPreferences.DEV9_DNS_MODE_MANUAL -> when (uiState.dev9Dns1) {
-                    "45.7.228.197" -> 1
-                    "67.222.156.250" -> 2
-                    else -> 0
-                }
-                else -> 0
-            },
-            onSelect = { preset ->
-                when (preset) {
-                    1 -> {
-                        viewModel.setDev9Dns1Mode(AppPreferences.DEV9_DNS_MODE_MANUAL)
-                        viewModel.setDev9Dns1("45.7.228.197")
-                    }
-                    2 -> {
-                        viewModel.setDev9Dns1Mode(AppPreferences.DEV9_DNS_MODE_MANUAL)
-                        viewModel.setDev9Dns1("67.222.156.250")
-                    }
-                    else -> {
-                        viewModel.setDev9Dns1Mode(AppPreferences.DEV9_DNS_MODE_AUTO)
-                        viewModel.setDev9Dns1("0.0.0.0")
-                    }
-                }
-            },
-            helpText = stringResource(R.string.settings_network_dns_preset_help)
-        )
-        DnsModeSetting(
-            title = stringResource(R.string.settings_network_dns1_mode),
-            addressTitle = stringResource(R.string.settings_network_dns1),
-            mode = uiState.dev9Dns1Mode,
-            address = uiState.dev9Dns1,
-            modes = dnsModes,
-            onModeChange = viewModel::setDev9Dns1Mode,
-            onAddressChange = viewModel::setDev9Dns1
-        )
-        DnsModeSetting(
-            title = stringResource(R.string.settings_network_dns2_mode),
-            addressTitle = stringResource(R.string.settings_network_dns2),
-            mode = uiState.dev9Dns2Mode,
-            address = uiState.dev9Dns2,
-            modes = dnsModes,
-            onModeChange = viewModel::setDev9Dns2Mode,
-            onAddressChange = viewModel::setDev9Dns2
-        )
-        ToggleItem(
-            icon = Icons.Rounded.Link,
-            title = stringResource(R.string.settings_network_intercept_dhcp),
-            subtitle = stringResource(R.string.settings_network_intercept_dhcp_desc),
-            checked = uiState.dev9InterceptDhcp,
-            onCheckedChange = viewModel::setDev9InterceptDhcp,
-            onResetToDefault = { viewModel.setDev9InterceptDhcp(defaults.dev9InterceptDhcp) }
-        )
-        ToggleItem(
-            icon = Icons.Rounded.Info,
-            title = stringResource(R.string.settings_network_log_dhcp),
-            subtitle = stringResource(R.string.settings_network_log_dhcp_desc),
-            checked = uiState.dev9LogDhcp,
-            onCheckedChange = viewModel::setDev9LogDhcp,
-            onResetToDefault = { viewModel.setDev9LogDhcp(defaults.dev9LogDhcp) }
-        )
-        ToggleItem(
-            icon = Icons.Rounded.Info,
-            title = stringResource(R.string.settings_network_log_dns),
-            subtitle = stringResource(R.string.settings_network_log_dns_desc),
-            checked = uiState.dev9LogDns,
-            onCheckedChange = viewModel::setDev9LogDns,
-            onResetToDefault = { viewModel.setDev9LogDns(defaults.dev9LogDns) }
-        )
-        }
-    }
-}
-
-@Composable
-private fun DnsModeSetting(
-    title: String,
-    addressTitle: String,
-    mode: String,
-    address: String,
-    modes: List<Pair<String, String>>,
-    onModeChange: (String) -> Unit,
-    onAddressChange: (String) -> Unit
-) {
-    ChoiceSection(
-        title = title,
-        options = modes.mapIndexed { index, (_, label) -> index to label },
-        selectedValue = modes.indexOfFirst { it.first == mode }.coerceAtLeast(0),
-        onSelect = { index -> modes.getOrNull(index)?.first?.let(onModeChange) },
-        helpText = stringResource(R.string.settings_network_dns_mode_help)
-    )
-    if (mode == AppPreferences.DEV9_DNS_MODE_MANUAL) {
-        var draft by remember(address) { mutableStateOf(address) }
-        val valid = remember(draft) { isValidIpv4(draft) }
-        OutlinedTextField(
-            value = draft,
-            onValueChange = { value ->
-                draft = value.filter { it.isDigit() || it == '.' }.take(15)
-                if (isValidIpv4(draft)) onAddressChange(draft)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .skipGamepadTextFieldFocus(),
-            label = { Text(addressTitle) },
-            supportingText = {
-                Text(stringResource(if (valid) R.string.settings_network_dns_address_desc else R.string.settings_network_dns_invalid))
-            },
-            isError = !valid,
-            singleLine = true
-        )
-    }
-}
-
-private fun isValidIpv4(value: String): Boolean {
-    val parts = value.split('.')
-    return parts.size == 4 && parts.all { part ->
-        part.isNotEmpty() && part.length <= 3 && part.toIntOrNull() in 0..255
-    }
-}
-
-private fun isPrivateIpv4(value: String): Boolean {
-    val parts = value.split('.').mapNotNull(String::toIntOrNull)
-    if (parts.size != 4 || parts.any { it !in 0..255 }) return false
-    return parts[0] == 10 ||
-        (parts[0] == 172 && parts[1] in 16..31) ||
-        (parts[0] == 192 && parts[1] == 168)
 }
 
 @Composable
@@ -4832,7 +4921,7 @@ private fun CustomControlsQuickSelector(
 }
 
 @Composable
-private fun SettingsSection(
+internal fun SettingsSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -4861,13 +4950,18 @@ private fun SettingsSection(
 }
 
 @Composable
-private fun SettingsItem(
+internal fun SettingsItem(
     icon: ImageVector,
     label: String,
     value: String,
     onClick: () -> Unit,
     helpText: String? = null,
-    border: BorderStroke? = null
+    border: BorderStroke? = null,
+    enabled: Boolean = true,
+    progressVisible: Boolean = false,
+    progress: Float? = null,
+    progressLabel: String? = null,
+    horizontalPadding: Dp = 16.dp
 ) {
     val debouncedClick = rememberDebouncedClick(onClick = onClick)
     val interactionSource = remember { MutableInteractionSource() }
@@ -4878,7 +4972,7 @@ private fun SettingsItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = horizontalPadding)
             .then(
                 if (tvUiEnabled && helpText != null) {
                     Modifier
@@ -4889,6 +4983,7 @@ private fun SettingsItem(
                 }
             )
             .gamepadFocusableCard(
+                enabled = enabled,
                 shape = shape,
                 interactionSource = interactionSource,
                 addFocusTarget = false
@@ -4897,53 +4992,79 @@ private fun SettingsItem(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         border = border,
         interactionSource = interactionSource,
+        enabled = enabled,
         onClick = debouncedClick
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
+            Row(
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 0.1f else 0.05f)
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else 0.5f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.5f),
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        helpText?.let {
+                            SettingHelpButton(
+                                title = label,
+                                description = it,
+                                focusRequester = helpFocusRequester,
+                                returnFocusRequester = itemFocusRequester
+                            )
+                        }
+                    }
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.6f)
+                    )
+                }
+            }
+            if (progressVisible) {
+                if (progress != null) {
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                progressLabel?.let { label ->
                     Text(
                         text = label,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f, fill = false)
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End
                     )
-                    helpText?.let {
-                        SettingHelpButton(
-                            title = label,
-                            description = it,
-                            focusRequester = helpFocusRequester,
-                            returnFocusRequester = itemFocusRequester
-                        )
-                    }
                 }
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }
@@ -5117,7 +5238,6 @@ private fun rememberSettingsSearchEntries(): List<SettingsSearchEntry> {
         entry(SettingsTab.Emulation, R.string.settings_ee_cycle_skip),
         entry(SettingsTab.Emulation, R.string.settings_mtvu),
         entry(SettingsTab.Emulation, R.string.settings_fast_cdvd),
-        entry(SettingsTab.Emulation, R.string.settings_enable_cheats),
         entry(SettingsTab.Emulation, R.string.settings_frame_skip),
         entry(SettingsTab.Fixes, R.string.settings_cpu_sprite_render_size),
         entry(SettingsTab.Fixes, R.string.settings_gpu_target_clut),
@@ -5255,7 +5375,7 @@ private fun GamepadBindingRow(
 }
 
 @Composable
-private fun ToggleItem(
+internal fun ToggleItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
@@ -5604,7 +5724,616 @@ private fun SliderItem(
 }
 
 @Composable
-private fun ChoiceSection(
+internal fun ShaderPresetSelector(
+    title: String,
+    presets: List<RetroArchShaderPreset>,
+    selectedPath: String,
+    onSelect: (String) -> Unit,
+    helpText: String,
+    leadingOptions: List<Pair<String, String>> = emptyList(),
+    cardHorizontalPadding: Dp = 16.dp
+) {
+    var showDialog by rememberSaveable { mutableStateOf(false) }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var expandedCategoryKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val categoryListState = rememberLazyListState()
+    val noneLabel = stringResource(R.string.settings_shader_preset_none)
+    val selectedLabel = leadingOptions.firstOrNull { (path, _) -> path == selectedPath }?.second
+        ?: presets
+            .firstOrNull { it.absolutePath == selectedPath }
+            ?.label
+            ?.substringAfterLast('/')
+        ?: noneLabel
+
+    SettingsItem(
+        icon = Icons.Rounded.AutoFixHigh,
+        label = title,
+        value = selectedLabel,
+        onClick = {
+            query = ""
+            searchExpanded = false
+            expandedCategoryKey = null
+            showDialog = true
+        },
+        helpText = helpText,
+        horizontalPadding = cardHorizontalPadding
+    )
+
+    if (showDialog) {
+        val generalLabel = stringResource(R.string.settings_general_tab)
+        val groups = remember(presets, noneLabel, generalLabel, leadingOptions, query) {
+            buildShaderPresetDialogGroups(
+                presets = presets,
+                leadingOptions = leadingOptions,
+                noneLabel = noneLabel,
+                generalLabel = generalLabel,
+                query = query
+            )
+        }
+        val searchFocusRequester = remember { FocusRequester() }
+        val keyboardController = LocalSoftwareKeyboardController.current
+
+        LaunchedEffect(searchExpanded) {
+            if (searchExpanded) searchFocusRequester.requestFocus()
+        }
+
+        LaunchedEffect(query) {
+            expandedCategoryKey = null
+        }
+
+        Dialog(
+            onDismissRequest = { showDialog = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val isLandscape = maxWidth > maxHeight
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth(if (isLandscape) 0.82f else 0.94f)
+                        .widthIn(max = if (isLandscape) 960.dp else 720.dp)
+                        .fillMaxHeight(if (isLandscape) 0.94f else 0.86f),
+                    shape = RoundedCornerShape(30.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+                    )
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(if (isLandscape) 50.dp else 56.dp),
+                                shape = RoundedCornerShape(18.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.AutoFixHigh,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(if (isLandscape) 27.dp else 30.dp)
+                                    )
+                                }
+                            }
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_retroarch_shaders),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    searchExpanded = !searchExpanded
+                                    if (!searchExpanded) {
+                                        query = ""
+                                        keyboardController?.hide()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Search,
+                                    contentDescription = stringResource(R.string.settings_search),
+                                    tint = if (searchExpanded) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+                        )
+
+                        AnimatedVisibility(
+                            visible = searchExpanded,
+                            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+                            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
+                        ) {
+                            OutlinedTextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        start = 22.dp,
+                                        top = 6.dp,
+                                        end = 22.dp,
+                                        bottom = 4.dp
+                                    )
+                                    .focusRequester(searchFocusRequester)
+                                    .skipGamepadTextFieldFocus(),
+                                label = { Text(title) },
+                                singleLine = true,
+                                leadingIcon = {
+                                    Icon(imageVector = Icons.Rounded.Search, contentDescription = null)
+                                },
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            query = ""
+                                            searchExpanded = false
+                                            keyboardController?.hide()
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = stringResource(R.string.home_search_clear)
+                                        )
+                                    }
+                                },
+                                shape = RoundedCornerShape(18.dp)
+                            )
+                        }
+
+                        if (groups.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.home_empty_search_title),
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            AnimatedContent(
+                                targetState = expandedCategoryKey,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                label = "shader-preset-category"
+                            ) { categoryKey ->
+                                val expandedGroup = groups.firstOrNull { it.key == categoryKey }
+                                if (expandedGroup == null) {
+                                    ShaderPresetCategoryList(
+                                        groups = groups,
+                                        selectedPath = selectedPath,
+                                        listState = categoryListState,
+                                        onOpenCategory = { expandedCategoryKey = it }
+                                    )
+                                } else {
+                                    ShaderPresetCategoryOptions(
+                                        group = expandedGroup,
+                                        selectedPath = selectedPath,
+                                        onCloseCategory = { expandedCategoryKey = null },
+                                        onSelect = { path ->
+                                            onSelect(path)
+                                            showDialog = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { showDialog = false }) {
+                                Text(stringResource(R.string.close))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal data class ShaderPresetDialogGroup(
+    val key: String,
+    val title: String,
+    val options: List<Pair<String, String>>,
+    val stripsCategoryPrefix: Boolean
+)
+
+private const val SHADER_PRESET_GENERAL_GROUP_KEY = "__shader_preset_general__"
+
+internal fun buildShaderPresetDialogGroups(
+    presets: List<RetroArchShaderPreset>,
+    leadingOptions: List<Pair<String, String>>,
+    noneLabel: String,
+    generalLabel: String,
+    query: String
+): List<ShaderPresetDialogGroup> {
+    val rootPresets = presets
+        .filterNot { '/' in it.label }
+        .map { it.absolutePath to it.label }
+    val generalGroup = ShaderPresetDialogGroup(
+        key = SHADER_PRESET_GENERAL_GROUP_KEY,
+        title = generalLabel,
+        options = leadingOptions + listOf("" to noneLabel) + rootPresets,
+        stripsCategoryPrefix = false
+    )
+    val presetGroups = presets
+        .filter { '/' in it.label }
+        .groupBy { it.label.substringBefore('/') }
+        .map { (category, categoryPresets) ->
+            ShaderPresetDialogGroup(
+                key = category,
+                title = shaderPresetCategoryTitle(category),
+                options = categoryPresets
+                    .sortedBy { it.label.lowercase() }
+                    .map { it.absolutePath to it.label },
+                stripsCategoryPrefix = true
+            )
+        }
+        .sortedBy { it.title.lowercase() }
+
+    val normalizedQuery = query.trim()
+    return (listOf(generalGroup) + presetGroups).mapNotNull { group ->
+        if (normalizedQuery.isEmpty() || group.title.contains(normalizedQuery, ignoreCase = true)) {
+            group
+        } else {
+            group.copy(
+                options = group.options.filter { (_, label) ->
+                    label.contains(normalizedQuery, ignoreCase = true)
+                }
+            ).takeIf { it.options.isNotEmpty() }
+        }
+    }
+}
+
+internal fun shaderPresetCategoryTitle(category: String): String {
+    return category
+        .replace('-', ' ')
+        .replace('_', ' ')
+        .split(' ')
+        .filter(String::isNotBlank)
+        .joinToString(" ") { word ->
+            when (word.lowercase()) {
+                "crt", "gba", "gb", "lcd", "nes", "ntsc", "pal", "snes", "vhs" -> word.uppercase()
+                else -> word.replaceFirstChar { it.titlecase() }
+            }
+        }
+}
+
+@Composable
+private fun ShaderPresetCategoryList(
+    groups: List<ShaderPresetDialogGroup>,
+    selectedPath: String,
+    listState: LazyListState,
+    onOpenCategory: (String) -> Unit
+) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .tvFocusGroup(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 10.dp)
+    ) {
+        items(items = groups, key = ShaderPresetDialogGroup::key) { group ->
+            ShaderPresetCategoryCard(
+                group = group,
+                selected = group.options.any { (path, _) -> path == selectedPath },
+                onClick = { onOpenCategory(group.key) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShaderPresetCategoryOptions(
+    group: ShaderPresetDialogGroup,
+    selectedPath: String,
+    onCloseCategory: () -> Unit,
+    onSelect: (String) -> Unit
+) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(group.key, selectedPath) {
+        val selectedIndex = group.options.indexOfFirst { (path, _) -> path == selectedPath }
+        if (selectedIndex >= 0) listState.scrollToItem(selectedIndex)
+    }
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ShaderPresetCategoryCard(
+            group = group,
+            selected = group.options.any { (path, _) -> path == selectedPath },
+            expanded = true,
+            onClick = onCloseCategory,
+            modifier = Modifier.padding(horizontal = 22.dp)
+        )
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .tvFocusGroup(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 10.dp)
+        ) {
+            items(
+                items = group.options,
+                key = { (path, _) -> path.ifEmpty { "shader-preset-none" } }
+            ) { (path, label) ->
+                ShaderPresetDialogOption(
+                    label = if (group.stripsCategoryPrefix) label.substringAfter('/') else label,
+                    selected = path == selectedPath,
+                    onClick = { onSelect(path) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShaderPresetCategoryCard(
+    group: ShaderPresetDialogGroup,
+    selected: Boolean,
+    expanded: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(18.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .tvGamepadFocusableCard(
+                shape = shape,
+                interactionSource = interactionSource,
+                addFocusTarget = false
+            ),
+        shape = shape,
+        interactionSource = interactionSource,
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+        },
+        border = BorderStroke(
+            1.dp,
+            if (selected) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.58f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.FolderOpen,
+                contentDescription = null,
+                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = group.title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f))
+            ) {
+                Text(
+                    text = group.options.size.toString(),
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShaderPresetDialogOption(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(16.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .tvGamepadFocusableCard(
+                shape = shape,
+                interactionSource = interactionSource,
+                addFocusTarget = false
+            ),
+        shape = shape,
+        interactionSource = interactionSource,
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+        },
+        border = BorderStroke(
+            1.dp,
+            if (selected) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.62f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Rounded.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SideArtworkPicker(
+    title: String,
+    options: List<Pair<Int, String>>,
+    selectedValue: Int,
+    revision: Int,
+    onSelect: (Int) -> Unit,
+    helpText: String
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            SettingHelpButton(title = title, description = helpText)
+        }
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .tvFocusGroup(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(options, key = { it.first }) { (value, label) ->
+                val artwork = EmulationSideArtwork.fromPreference(value)
+                val selected = selectedValue == value
+                val interactionSource = remember { MutableInteractionSource() }
+                Surface(
+                    onClick = { onSelect(value) },
+                    modifier = Modifier
+                        .width(156.dp)
+                        .aspectRatio(16f / 9f)
+                        .tvGamepadFocusableCard(
+                            shape = RoundedCornerShape(14.dp),
+                            interactionSource = interactionSource,
+                            addFocusTarget = false
+                        ),
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.Black,
+                    interactionSource = interactionSource,
+                    border = BorderStroke(
+                        if (selected) 2.dp else 1.dp,
+                        if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outlineVariant
+                    )
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        EmulationSideArtworkThumbnail(
+                            artwork = artwork,
+                            revision = revision,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        0.42f to Color.Transparent,
+                                        1f to Color.Black.copy(alpha = 0.86f)
+                                    )
+                                )
+                        )
+                        Text(
+                            text = label,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ChoiceSection(
     title: String,
     options: List<Pair<Int, String>>,
     selectedValue: Int,
@@ -5781,7 +6510,7 @@ private fun premiumFilterChipColors() = FilterChipDefaults.filterChipColors(
 )
 
 @Composable
-private fun SettingsInlineNote(text: String) {
+internal fun SettingsInlineNote(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,

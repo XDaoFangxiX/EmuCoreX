@@ -29,6 +29,20 @@ fun buildConfigString(value: String): String = "\"" + value
 
 val feedbackEndpoint = localProperty("emucorex.feedback.endpoint").orEmpty()
 val feedbackApiKey = localProperty("emucorex.feedback.apiKey").orEmpty()
+val multiplayerSignalingUrl = "https://emucorex-multiplayer.kyivstar19971502.workers.dev"
+val multiplayerClientCode = "ecx-mp-v1-7H4K9M2Q"
+val discordApplicationId = "1536775623287115786"
+val discordSdkDirectory = (
+    providers.gradleProperty("emucorex.discord.sdkDir").orNull
+        ?: localProperty("emucorex.discord.sdkDir")
+        ?: providers.environmentVariable("DISCORD_SDK_DIR").orNull
+    )
+    ?.let(::file)
+    ?.takeIf { sdkDir ->
+        sdkDir.resolve("include/discordpp.h").isFile &&
+            sdkDir.resolve("arm64-v8a/libdiscord_partner_sdk.so").isFile &&
+            sdkDir.resolve("discord_partner_sdk.aar").isFile
+    }
 val emucorexCmakeVersion = "3.22.1"
 val emucorexNdkVersion = "29.0.14206865"
 
@@ -52,11 +66,16 @@ android {
         applicationId = "com.sbro.emucorex"
         minSdk = 29
         targetSdk = 37
-        versionCode = 147
-        versionName = "0.3.3"
+        versionCode = 151
+        versionName = "0.3.4"
 
         buildConfigField("String", "FEEDBACK_ENDPOINT", buildConfigString(feedbackEndpoint))
         buildConfigField("String", "FEEDBACK_API_KEY", buildConfigString(feedbackApiKey))
+        buildConfigField("String", "MULTIPLAYER_SIGNALING_URL", buildConfigString(multiplayerSignalingUrl))
+        buildConfigField("String", "MULTIPLAYER_CLIENT_CODE", buildConfigString(multiplayerClientCode))
+        buildConfigField("long", "DISCORD_APPLICATION_ID", "${discordApplicationId}L")
+        buildConfigField("boolean", "DISCORD_SDK_AVAILABLE", (discordSdkDirectory != null).toString())
+        manifestPlaceholders["discordSdkAvailable"] = (discordSdkDirectory != null).toString()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -70,6 +89,7 @@ android {
                     "-DEMUCOREX_ANDROID_HOST_PAGE_SIZE=0x1000",
                     "-DEMUCOREX_NATIVE_LIBRARY_NAME=emucore_4k"
                 )
+                arguments("-DDISCORD_SDK_DIR=${discordSdkDirectory?.invariantSeparatorsPath.orEmpty()}")
             }
         }
         ndk {
@@ -135,11 +155,13 @@ android {
             java.srcDir("src/main/cpp/PCSX2/3rdparty/SDL3/android-project/app/src/main/java")
             // Populated only by tools/build_universal_page_release.ps1.
             jniLibs.srcDir(file("build/generated/page-size-jni-libs"))
+            discordSdkDirectory?.let(jniLibs::srcDir)
         }
     }
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            pickFirsts += "**/libdiscord_partner_sdk.so"
         }
     }
     bundle {
@@ -307,6 +329,11 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.androidx.browser)
+    implementation(libs.webrtc.android)
+    discordSdkDirectory?.let { sdkDir ->
+        implementation(files(sdkDir.resolve("discord_partner_sdk.aar")))
+    }
     ksp(libs.androidx.room.compiler)
     implementation(libs.android.youtube.player.core)
     implementation(platform(libs.firebase.bom))

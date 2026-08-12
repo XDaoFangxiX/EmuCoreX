@@ -66,8 +66,13 @@ data class SettingsSnapshot(
     val customFontRevision: Int = 0,
     val homeGridScale: Float = AppPreferences.DEFAULT_HOME_GRID_SCALE,
     val homeBackgroundType: HomeBackgroundType = HomeBackgroundType.NONE,
+    val homeBackgroundPreset: HomeBackgroundPreset = HomeBackgroundPreset.OLYMPUS,
     val homeBackgroundRevision: Int = 0,
     val homeBackgroundDim: Int = AppPreferences.DEFAULT_HOME_BACKGROUND_DIM,
+    val emulationSideArtwork: EmulationSideArtwork = EmulationSideArtwork.NONE,
+    val emulationSideArtworkRevision: Int = 0,
+    val emulationSideArtworkDim: Int = AppPreferences.DEFAULT_EMULATION_SIDE_ARTWORK_DIM,
+    val localMultiplayerMode: Int = AppPreferences.LOCAL_MULTIPLAYER_OFF,
     val touchControlVisualStyle: TouchControlVisualStyle = TouchControlVisualStyle.CLASSIC,
     val touchControlPressEffect: TouchControlPressEffect = TouchControlPressEffect.GROW,
     val gameMenuLayoutStyle: GameMenuLayoutStyle = GameMenuLayoutStyle.SIDEBAR,
@@ -85,6 +90,9 @@ data class SettingsSnapshot(
     val renderer: Int = RendererDefaults.defaultForHardware(),
     val upscaleMultiplier: Float = 1f,
     val aspectRatio: Int = 1,
+    val displayCrop: DisplayCrop = DisplayCrop.None,
+    val shaderChainEnabled: Boolean = false,
+    val shaderChainPreset: String = "",
     val audioVolume: Int = AudioDefaults.VOLUME_DEFAULT,
     val audioFastForwardVolume: Int = AudioDefaults.VOLUME_DEFAULT,
     val audioMuted: Boolean = false,
@@ -315,6 +323,8 @@ class AppPreferences(private val context: Context) {
         const val DEV9_LOCAL_LINK_OFF = 0
         const val DEV9_LOCAL_LINK_HOST = 1
         const val DEV9_LOCAL_LINK_JOIN = 2
+        const val DEV9_INTERNET_LINK_HOST = 3
+        const val DEV9_INTERNET_LINK_JOIN = 4
         const val DEFAULT_LOCAL_LINK_PORT = 19072
         private const val CURRENT_OVERLAY_LAYOUT_VERSION = 16
         const val DEFAULT_NTSC_FRAMERATE = 59.94f
@@ -328,6 +338,12 @@ class AppPreferences(private val context: Context) {
         const val MIN_HOME_GRID_SCALE = 0.60f
         const val MAX_HOME_GRID_SCALE = 1.60f
         const val DEFAULT_HOME_BACKGROUND_DIM = 48
+        const val DEFAULT_EMULATION_SIDE_ARTWORK_DIM = 0
+        const val LOCAL_MULTIPLAYER_OFF = 0
+        const val LOCAL_MULTIPLAYER_SIDE_BY_SIDE = 1
+        const val LOCAL_MULTIPLAYER_STACKED = 2
+        const val LOCAL_MULTIPLAYER_HORIZONTAL_CROP = 3
+        const val LOCAL_MULTIPLAYER_HORIZONTAL_CROP_SWAPPED = 4
         const val MIN_FAST_FORWARD_SPEED = 1.25f
         const val MAX_FAST_FORWARD_SPEED = 5.0f
         private const val LEGACY_DEFAULT_LSTICK_OFFSET_X = 18f
@@ -361,7 +377,7 @@ class AppPreferences(private val context: Context) {
         const val OVERLAY_OPACITY_MIN = 0
         const val OVERLAY_OPACITY_MAX = 100
         const val DEFAULT_OVERLAY_OPACITY = 80
-        const val DEFAULT_TOUCHSCREEN_RIGHT_STICK = false
+        const val DEFAULT_TOUCHSCREEN_RIGHT_STICK = true
         const val TOUCHSCREEN_RIGHT_STICK_SENSITIVITY_MIN = 50
         const val TOUCHSCREEN_RIGHT_STICK_SENSITIVITY_MAX = 200
         const val DEFAULT_TOUCHSCREEN_RIGHT_STICK_SENSITIVITY = 100
@@ -421,13 +437,13 @@ class AppPreferences(private val context: Context) {
             "cross" to OverlayControlLayout(),
             "square" to OverlayControlLayout(),
             "circle" to OverlayControlLayout(),
-            "right_stick" to OverlayControlLayout(scale = stickScale, widthScale = 160, visible = false),
+            "right_stick" to OverlayControlLayout(scale = stickScale, widthScale = 160, visible = true),
             "select" to OverlayControlLayout(scale = 80),
             "left_input_toggle" to OverlayControlLayout(scale = 80, visible = true),
             "pressure" to OverlayControlLayout(scale = 80, visible = false),
             "start" to OverlayControlLayout(scale = 80),
-            "l3" to OverlayControlLayout(visible = false),
-            "r3" to OverlayControlLayout(visible = false)
+            "l3" to OverlayControlLayout(scale = 76, visible = true),
+            "r3" to OverlayControlLayout(scale = 76, visible = true)
         )
 
         private val THEME_MODE = intPreferencesKey("theme_mode")
@@ -440,8 +456,13 @@ class AppPreferences(private val context: Context) {
         private val CUSTOM_FONT_REVISION = intPreferencesKey("custom_font_revision")
         private val HOME_GRID_SCALE = floatPreferencesKey("home_grid_scale")
         private val HOME_BACKGROUND_TYPE = intPreferencesKey("home_background_type")
+        private val HOME_BACKGROUND_PRESET = intPreferencesKey("home_background_preset")
         private val HOME_BACKGROUND_REVISION = intPreferencesKey("home_background_revision")
         private val HOME_BACKGROUND_DIM = intPreferencesKey("home_background_dim")
+        private val EMULATION_SIDE_ARTWORK = intPreferencesKey("emulation_side_artwork")
+        private val EMULATION_SIDE_ARTWORK_REVISION = intPreferencesKey("emulation_side_artwork_revision")
+        private val EMULATION_SIDE_ARTWORK_DIM = intPreferencesKey("emulation_side_artwork_dim")
+        private val LOCAL_MULTIPLAYER_MODE = intPreferencesKey("local_multiplayer_mode")
         private val COVER_CACHE_REVISION = intPreferencesKey("cover_cache_revision")
         private val TOUCH_CONTROL_VISUAL_STYLE = intPreferencesKey("touch_control_visual_style")
         private val TOUCH_CONTROL_PRESS_EFFECT = intPreferencesKey("touch_control_press_effect")
@@ -467,6 +488,8 @@ class AppPreferences(private val context: Context) {
         private val RENDERER = intPreferencesKey("renderer")
         private val UPSCALE = floatPreferencesKey("upscale_multiplier_v2")
         private val UPSCALE_LEGACY = intPreferencesKey("upscale_multiplier")
+        private val SHADER_CHAIN_ENABLED = booleanPreferencesKey("shader_chain_enabled")
+        private val SHADER_CHAIN_PRESET = stringPreferencesKey("shader_chain_preset")
         private val BIOS_PATH = stringPreferencesKey("bios_path")
         private val GAME_PATH = stringPreferencesKey("game_path")
         private val GAME_PATHS = stringPreferencesKey("game_paths")
@@ -478,6 +501,10 @@ class AppPreferences(private val context: Context) {
         private val GPU_HARDWARE_PROFILE = intPreferencesKey("gpu_hardware_profile")
         private val LANGUAGE_TAG = stringPreferencesKey("language_tag")
         private val ASPECT_RATIO = intPreferencesKey("aspect_ratio")
+        private val DISPLAY_CROP_LEFT = intPreferencesKey("display_crop_left")
+        private val DISPLAY_CROP_TOP = intPreferencesKey("display_crop_top")
+        private val DISPLAY_CROP_RIGHT = intPreferencesKey("display_crop_right")
+        private val DISPLAY_CROP_BOTTOM = intPreferencesKey("display_crop_bottom")
         private val AUDIO_VOLUME = intPreferencesKey("audio_volume")
         private val AUDIO_FAST_FORWARD_VOLUME = intPreferencesKey("audio_fast_forward_volume")
         private val AUDIO_MUTED = booleanPreferencesKey("audio_muted")
@@ -749,12 +776,34 @@ class AppPreferences(private val context: Context) {
         .map { prefs -> HomeBackgroundType.fromPreference(prefs[HOME_BACKGROUND_TYPE]) }
         .distinctUntilChanged()
 
+    val homeBackgroundPreset: Flow<HomeBackgroundPreset> = context.dataStore.data
+        .map { prefs -> HomeBackgroundPreset.fromPreference(prefs[HOME_BACKGROUND_PRESET]) }
+        .distinctUntilChanged()
+
     val homeBackgroundRevision: Flow<Int> = context.dataStore.data
         .map { prefs -> (prefs[HOME_BACKGROUND_REVISION] ?: 0).coerceAtLeast(0) }
         .distinctUntilChanged()
 
     val homeBackgroundDim: Flow<Int> = context.dataStore.data
         .map { prefs -> (prefs[HOME_BACKGROUND_DIM] ?: DEFAULT_HOME_BACKGROUND_DIM).coerceIn(0, 85) }
+        .distinctUntilChanged()
+
+    val emulationSideArtwork: Flow<EmulationSideArtwork> = context.dataStore.data
+        .map { prefs -> EmulationSideArtwork.fromPreference(prefs[EMULATION_SIDE_ARTWORK]) }
+        .distinctUntilChanged()
+
+    val emulationSideArtworkRevision: Flow<Int> = context.dataStore.data
+        .map { prefs -> (prefs[EMULATION_SIDE_ARTWORK_REVISION] ?: 0).coerceAtLeast(0) }
+        .distinctUntilChanged()
+
+    val emulationSideArtworkDim: Flow<Int> = context.dataStore.data
+        .map { prefs ->
+            (prefs[EMULATION_SIDE_ARTWORK_DIM] ?: DEFAULT_EMULATION_SIDE_ARTWORK_DIM).coerceIn(0, 85)
+        }
+        .distinctUntilChanged()
+
+    val localMultiplayerMode: Flow<Int> = context.dataStore.data
+        .map { prefs -> normalizeLocalMultiplayerMode(prefs[LOCAL_MULTIPLAYER_MODE]) }
         .distinctUntilChanged()
 
     val coverCacheRevision: Flow<Int> = context.dataStore.data
@@ -905,8 +954,40 @@ class AppPreferences(private val context: Context) {
         }
     }
 
+    suspend fun setHomeBackgroundPreset(preset: HomeBackgroundPreset) {
+        context.dataStore.edit { prefs ->
+            prefs[HOME_BACKGROUND_PRESET] = preset.preferenceValue
+            prefs[HOME_BACKGROUND_TYPE] = HomeBackgroundType.BUILT_IN.preferenceValue
+            prefs[HOME_BACKGROUND_REVISION] = (prefs[HOME_BACKGROUND_REVISION] ?: 0) + 1
+        }
+    }
+
     suspend fun setHomeBackgroundDim(dim: Int) {
         context.dataStore.edit { it[HOME_BACKGROUND_DIM] = dim.coerceIn(0, 85) }
+    }
+
+    suspend fun setEmulationSideArtwork(artwork: EmulationSideArtwork) {
+        context.dataStore.edit { prefs ->
+            prefs[EMULATION_SIDE_ARTWORK] = artwork.preferenceValue
+            prefs[EMULATION_SIDE_ARTWORK_REVISION] =
+                (prefs[EMULATION_SIDE_ARTWORK_REVISION] ?: 0) + 1
+        }
+    }
+
+    suspend fun setEmulationSideArtworkDim(dim: Int) {
+        context.dataStore.edit { it[EMULATION_SIDE_ARTWORK_DIM] = dim.coerceIn(0, 85) }
+    }
+
+    suspend fun setLocalMultiplayerMode(mode: Int) {
+        context.dataStore.edit { it[LOCAL_MULTIPLAYER_MODE] = normalizeLocalMultiplayerMode(mode) }
+    }
+
+    private fun normalizeLocalMultiplayerMode(mode: Int?): Int = when (mode) {
+        LOCAL_MULTIPLAYER_SIDE_BY_SIDE,
+        LOCAL_MULTIPLAYER_STACKED,
+        LOCAL_MULTIPLAYER_HORIZONTAL_CROP,
+        LOCAL_MULTIPLAYER_HORIZONTAL_CROP_SWAPPED -> mode
+        else -> LOCAL_MULTIPLAYER_OFF
     }
 
     suspend fun notifyCoverCacheCleared() {
@@ -1068,6 +1149,13 @@ class AppPreferences(private val context: Context) {
     suspend fun setRenderer(value: Int) {
         context.dataStore.edit { prefs ->
             prefs[RENDERER] = normalizeRendererPreference(value)
+        }
+    }
+
+    suspend fun setShaderChain(enabled: Boolean, preset: String) {
+        context.dataStore.edit { prefs ->
+            prefs[SHADER_CHAIN_ENABLED] = enabled
+            prefs[SHADER_CHAIN_PRESET] = preset
         }
     }
 
@@ -1478,9 +1566,17 @@ class AppPreferences(private val context: Context) {
                 homeGridScale = (prefs[HOME_GRID_SCALE] ?: DEFAULT_HOME_GRID_SCALE)
                     .coerceIn(MIN_HOME_GRID_SCALE, MAX_HOME_GRID_SCALE),
                 homeBackgroundType = HomeBackgroundType.fromPreference(prefs[HOME_BACKGROUND_TYPE]),
+                homeBackgroundPreset = HomeBackgroundPreset.fromPreference(prefs[HOME_BACKGROUND_PRESET]),
                 homeBackgroundRevision = (prefs[HOME_BACKGROUND_REVISION] ?: 0).coerceAtLeast(0),
                 homeBackgroundDim = (prefs[HOME_BACKGROUND_DIM] ?: DEFAULT_HOME_BACKGROUND_DIM)
                     .coerceIn(0, 85),
+                emulationSideArtwork = EmulationSideArtwork.fromPreference(prefs[EMULATION_SIDE_ARTWORK]),
+                emulationSideArtworkRevision = (prefs[EMULATION_SIDE_ARTWORK_REVISION] ?: 0)
+                    .coerceAtLeast(0),
+                emulationSideArtworkDim =
+                    (prefs[EMULATION_SIDE_ARTWORK_DIM] ?: DEFAULT_EMULATION_SIDE_ARTWORK_DIM)
+                        .coerceIn(0, 85),
+                localMultiplayerMode = normalizeLocalMultiplayerMode(prefs[LOCAL_MULTIPLAYER_MODE]),
                 touchControlVisualStyle = TouchControlVisualStyle.fromPreference(prefs[TOUCH_CONTROL_VISUAL_STYLE]),
                 touchControlPressEffect = TouchControlPressEffect.fromPreference(prefs[TOUCH_CONTROL_PRESS_EFFECT]),
                 gameMenuLayoutStyle = GameMenuLayoutStyle.fromPreference(prefs[GAME_MENU_LAYOUT_STYLE]),
@@ -1498,6 +1594,9 @@ class AppPreferences(private val context: Context) {
                 renderer = normalizeRendererPreference(prefs[RENDERER]),
                 upscaleMultiplier = readUpscale(prefs),
                 aspectRatio = normalizeAspectRatioPreference(prefs[ASPECT_RATIO]),
+                displayCrop = readDisplayCrop(prefs),
+                shaderChainEnabled = prefs[SHADER_CHAIN_ENABLED] ?: false,
+                shaderChainPreset = prefs[SHADER_CHAIN_PRESET].orEmpty(),
                 audioVolume = AudioDefaults.coerceVolume(
                     prefs[AUDIO_VOLUME] ?: AudioDefaults.VOLUME_DEFAULT
                 ),
@@ -1778,7 +1877,10 @@ class AppPreferences(private val context: Context) {
     }
 
     private fun sanitizeLocalLinkMode(mode: Int?): Int = when (mode) {
-        DEV9_LOCAL_LINK_HOST, DEV9_LOCAL_LINK_JOIN -> mode
+        DEV9_LOCAL_LINK_HOST,
+        DEV9_LOCAL_LINK_JOIN,
+        DEV9_INTERNET_LINK_HOST,
+        DEV9_INTERNET_LINK_JOIN -> mode
         else -> DEV9_LOCAL_LINK_OFF
     }
 
@@ -1854,6 +1956,27 @@ class AppPreferences(private val context: Context) {
     suspend fun setAspectRatio(value: Int) {
         context.dataStore.edit { it[ASPECT_RATIO] = normalizeAspectRatioPreference(value) }
     }
+
+    val displayCrop: Flow<DisplayCrop> = context.dataStore.data
+        .map(::readDisplayCrop)
+        .distinctUntilChanged()
+
+    suspend fun setDisplayCrop(value: DisplayCrop) {
+        val crop = value.sanitized()
+        context.dataStore.edit { prefs ->
+            prefs[DISPLAY_CROP_LEFT] = crop.left
+            prefs[DISPLAY_CROP_TOP] = crop.top
+            prefs[DISPLAY_CROP_RIGHT] = crop.right
+            prefs[DISPLAY_CROP_BOTTOM] = crop.bottom
+        }
+    }
+
+    private fun readDisplayCrop(prefs: Preferences): DisplayCrop = DisplayCrop(
+        left = prefs[DISPLAY_CROP_LEFT] ?: 0,
+        top = prefs[DISPLAY_CROP_TOP] ?: 0,
+        right = prefs[DISPLAY_CROP_RIGHT] ?: 0,
+        bottom = prefs[DISPLAY_CROP_BOTTOM] ?: 0
+    ).sanitized()
 
     val autoProgressiveScan: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[AUTO_PROGRESSIVE_SCAN] ?: false
@@ -3388,7 +3511,13 @@ class AppPreferences(private val context: Context) {
             put("customFontName", prefs[CUSTOM_FONT_NAME])
             put("homeGridScale", (prefs[HOME_GRID_SCALE] ?: DEFAULT_HOME_GRID_SCALE).toDouble())
             put("homeBackgroundDim", prefs[HOME_BACKGROUND_DIM] ?: DEFAULT_HOME_BACKGROUND_DIM)
+            put(
+                "emulationSideArtworkDim",
+                prefs[EMULATION_SIDE_ARTWORK_DIM] ?: DEFAULT_EMULATION_SIDE_ARTWORK_DIM
+            )
+            put("localMultiplayerMode", normalizeLocalMultiplayerMode(prefs[LOCAL_MULTIPLAYER_MODE]))
             put("homeBackgroundType", prefs[HOME_BACKGROUND_TYPE] ?: HomeBackgroundType.NONE.preferenceValue)
+            put("homeBackgroundPreset", prefs[HOME_BACKGROUND_PRESET] ?: HomeBackgroundPreset.OLYMPUS.preferenceValue)
             put("touchControlVisualStyle", prefs[TOUCH_CONTROL_VISUAL_STYLE] ?: TouchControlVisualStyle.CLASSIC.preferenceValue)
             put("touchControlPressEffect", prefs[TOUCH_CONTROL_PRESS_EFFECT] ?: TouchControlPressEffect.GROW.preferenceValue)
             put("gameMenuLayoutStyle", prefs[GAME_MENU_LAYOUT_STYLE] ?: GameMenuLayoutStyle.SIDEBAR.preferenceValue)
@@ -3403,6 +3532,8 @@ class AppPreferences(private val context: Context) {
             put("renderer", normalizeRendererPreference(prefs[RENDERER]))
             put("mediatekAngleOpenGl", prefs[MEDIATEK_ANGLE_OPENGL] ?: false)
             put("upscaleMultiplier", readUpscale(prefs).toDouble())
+            put("shaderChainEnabled", prefs[SHADER_CHAIN_ENABLED] ?: false)
+            put("shaderChainPreset", prefs[SHADER_CHAIN_PRESET].orEmpty())
             put("biosPath", prefs[BIOS_PATH])
             put("gamePath", prefs[GAME_PATH])
             put("gamePaths", JSONArray(readGamePaths(prefs)))
@@ -3412,6 +3543,12 @@ class AppPreferences(private val context: Context) {
             put("onboardingCompleted", prefs[ONBOARDING_COMPLETED] ?: false)
             put("languageTag", prefs[LANGUAGE_TAG])
             put("aspectRatio", normalizeAspectRatioPreference(prefs[ASPECT_RATIO]))
+            readDisplayCrop(prefs).let { crop ->
+                put("displayCropLeft", crop.left)
+                put("displayCropTop", crop.top)
+                put("displayCropRight", crop.right)
+                put("displayCropBottom", crop.bottom)
+            }
             put("audioVolume", AudioDefaults.coerceVolume(prefs[AUDIO_VOLUME] ?: AudioDefaults.VOLUME_DEFAULT))
             put("audioFastForwardVolume", AudioDefaults.coerceVolume(prefs[AUDIO_FAST_FORWARD_VOLUME] ?: AudioDefaults.VOLUME_DEFAULT))
             put("audioMuted", prefs[AUDIO_MUTED] ?: false)
@@ -3657,8 +3794,18 @@ class AppPreferences(private val context: Context) {
                 .toFloat().coerceIn(MIN_HOME_GRID_SCALE, MAX_HOME_GRID_SCALE)
             prefs[HOME_BACKGROUND_DIM] = json.optInt("homeBackgroundDim", DEFAULT_HOME_BACKGROUND_DIM)
                 .coerceIn(0, 85)
+            prefs[EMULATION_SIDE_ARTWORK_DIM] = json.optInt(
+                "emulationSideArtworkDim",
+                DEFAULT_EMULATION_SIDE_ARTWORK_DIM
+            ).coerceIn(0, 85)
+            prefs[LOCAL_MULTIPLAYER_MODE] = normalizeLocalMultiplayerMode(
+                json.optInt("localMultiplayerMode", LOCAL_MULTIPLAYER_OFF)
+            )
             prefs[HOME_BACKGROUND_TYPE] = HomeBackgroundType.fromPreference(
                 json.optInt("homeBackgroundType", HomeBackgroundType.NONE.preferenceValue)
+            ).preferenceValue
+            prefs[HOME_BACKGROUND_PRESET] = HomeBackgroundPreset.fromPreference(
+                json.optInt("homeBackgroundPreset", HomeBackgroundPreset.OLYMPUS.preferenceValue)
             ).preferenceValue
             prefs[TOUCH_CONTROL_VISUAL_STYLE] = TouchControlVisualStyle.fromPreference(
                 json.optInt("touchControlVisualStyle", TouchControlVisualStyle.CLASSIC.preferenceValue)
@@ -3696,6 +3843,10 @@ class AppPreferences(private val context: Context) {
             prefs[MEDIATEK_ANGLE_OPENGL] = json.optBoolean("mediatekAngleOpenGl", false) &&
                 GpuHardwareProfiles.isMediatekProfile(gpuHardwareProfile)
             prefs[UPSCALE] = json.readUpscaleMultiplier()
+            prefs[SHADER_CHAIN_ENABLED] = json.optBoolean("shaderChainEnabled", false)
+            json.optString("shaderChainPreset").trim().takeIf(String::isNotEmpty)?.let {
+                prefs[SHADER_CHAIN_PRESET] = it
+            } ?: prefs.remove(SHADER_CHAIN_PRESET)
             json.optString("biosPath").takeIf { it.isNotBlank() }?.let { prefs[BIOS_PATH] = it } ?: prefs.remove(BIOS_PATH)
             val importedGamePaths = json.optJSONArray("gamePaths")?.let { array ->
                 buildList {
@@ -3727,6 +3878,17 @@ class AppPreferences(private val context: Context) {
             prefs[ONBOARDING_COMPLETED] = json.optBoolean("onboardingCompleted", false)
             languageTag?.let { prefs[LANGUAGE_TAG] = it } ?: prefs.remove(LANGUAGE_TAG)
             prefs[ASPECT_RATIO] = normalizeAspectRatioPreference(json.optInt("aspectRatio", 1))
+            DisplayCrop(
+                left = json.optInt("displayCropLeft", 0),
+                top = json.optInt("displayCropTop", 0),
+                right = json.optInt("displayCropRight", 0),
+                bottom = json.optInt("displayCropBottom", 0)
+            ).sanitized().let { crop ->
+                prefs[DISPLAY_CROP_LEFT] = crop.left
+                prefs[DISPLAY_CROP_TOP] = crop.top
+                prefs[DISPLAY_CROP_RIGHT] = crop.right
+                prefs[DISPLAY_CROP_BOTTOM] = crop.bottom
+            }
             prefs[AUDIO_VOLUME] = AudioDefaults.coerceVolume(json.optInt("audioVolume", AudioDefaults.VOLUME_DEFAULT))
             prefs[AUDIO_FAST_FORWARD_VOLUME] = AudioDefaults.coerceVolume(
                 json.optInt("audioFastForwardVolume", AudioDefaults.VOLUME_DEFAULT)

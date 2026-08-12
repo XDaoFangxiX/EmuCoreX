@@ -44,6 +44,45 @@ static constexpr std::array<PresentShader, 8> s_tv_shader_indices = {
 	PresentShader::COMPLEX_FILTER, PresentShader::LOTTES_FILTER,
 	PresentShader::SUPERSAMPLE_4xRGSS, PresentShader::SUPERSAMPLE_AUTO};
 
+static void PresentLocalMultiplayerFrame(GSTexture* current, const GSVector4& src_uv,
+	const GSVector4& draw_rect, PresentShader shader, float shader_parameter, bool linear)
+{
+	const int mode = std::clamp(GSConfig.LocalMultiplayerMode, 0, 4);
+	if (mode == 0)
+	{
+		g_gs_device->PresentRect(current, src_uv, nullptr, draw_rect, shader, shader_parameter, linear);
+		return;
+	}
+
+	const float width = static_cast<float>(g_gs_device->GetWindowWidth());
+	const float height = static_cast<float>(g_gs_device->GetWindowHeight());
+	const GSVector4 left(0.0f, 0.0f, width * 0.5f, height);
+	const GSVector4 right(width * 0.5f, 0.0f, width, height);
+	const GSVector4 top(0.0f, 0.0f, width, height * 0.5f);
+	const GSVector4 bottom(0.0f, height * 0.5f, width, height);
+
+	if (mode == 1)
+	{
+		g_gs_device->PresentRect(current, src_uv, nullptr, left, shader, shader_parameter, linear);
+		g_gs_device->PresentRect(current, src_uv, nullptr, right, shader, shader_parameter, linear);
+	}
+	else if (mode == 2)
+	{
+		g_gs_device->PresentRect(current, src_uv, nullptr, top, shader, shader_parameter, linear);
+		g_gs_device->PresentRect(current, src_uv, nullptr, bottom, shader, shader_parameter, linear);
+	}
+	else
+	{
+		const float middle_v = (src_uv.y + src_uv.w) * 0.5f;
+		const GSVector4 first(src_uv.x, src_uv.y, src_uv.z, middle_v);
+		const GSVector4 second(src_uv.x, middle_v, src_uv.z, src_uv.w);
+		g_gs_device->PresentRect(current, mode == 3 ? first : second, nullptr, top,
+			shader, shader_parameter, linear);
+		g_gs_device->PresentRect(current, mode == 3 ? second : first, nullptr, bottom,
+			shader, shader_parameter, linear);
+	}
+}
+
 static std::deque<std::thread> s_screenshot_threads;
 static std::mutex s_screenshot_threads_mutex;
 
@@ -56,6 +95,10 @@ static GSVector4 s_last_draw_rect;
 // Screen alignment
 static GSDisplayAlignment s_display_alignment = GSDisplayAlignment::Center;
 
+static GSVector4i CalculateDrawSrcRect(const GSTexture* src, const GSVector2i real_size);
+static GSVector4 CalculateDrawDstRect(s32 window_width, s32 window_height, const GSVector4i& src_rect,
+	const GSVector2i& src_size, GSDisplayAlignment alignment, bool flip_y, bool is_progressive);
+
 static bool IsSGSRPresentActive()
 {
 	return GSConfig.SGSRMode != GSSGSRMode::Disabled;
@@ -67,7 +110,17 @@ GSRenderer::GSRenderer()
 	s_last_draw_rect = GSVector4::zero();
 }
 
-GSRenderer::~GSRenderer() = default;
+GSRenderer::~GSRenderer()
+{
+	// Android may reuse the same SurfaceView for the next VM. Do not expose the
+	// previous game's geometry while the replacement renderer produces its first frame.
+	s_last_draw_rect = GSVector4::zero();
+}
+
+GSVector4 GSRenderer::GetLastDrawRect()
+{
+	return s_last_draw_rect;
+}
 
 void GSRenderer::Reset(bool hardware_reset)
 {
@@ -269,6 +322,40 @@ bool GSRenderer::Merge(int field)
 
 	if (GSConfig.FXAA)
 		g_gs_device->FXAA();
+
+	// RetroArch (.slangp) shader chain runs last in the post-process chain, so it sees the
+	// finished frame the way the user actually sees it (ShadeBoost/FXAA included).
+	//
+	// It renders at the frame's ON-SCREEN size, not the internal one. Shaders that generate
+	// detail per output pixel — CRT scanlines above all — must run at display pixel density:
+	// generated at 640x448 and then upscaled to a 1080p window, one scanline lands on ~2.4
+	// screen pixels, so the presenter's filtering smears them into the uneven, wrong-looking
+	// pattern reported on an AYN Thor. RetroArch itself renders the chain into the viewport
+	// for exactly this reason.
+	//
+	// The target MUST be the aspect-corrected draw rect, not the raw window. librashader maps
+	// the whole input to the whole viewport, so a 16:9 target for a 4:3 frame stretches the
+	// picture — and CalculateDrawDstRect derives its rect from the aspect-ratio SETTING, not
+	// from the texture, so it would then letterbox the already-stretched result instead of
+	// correcting it. Matching the draw rect keeps the final present a 1:1 blit.
+	//
+	// m_real_size is deliberately left alone: in CalculateDrawSrcRect it only scales user Crop
+	// values (with no crop the src rect is the whole texture either way), so holding it at the
+	// internal size keeps crop proportional to the frame rather than to the shaded target.
+	if (GSConfig.ShaderChainEnabled && !GSConfig.ShaderChainPreset.empty())
+	{
+		if (GSTexture* const pre_chain = g_gs_device->GetCurrent())
+		{
+			const GSVector4i pre_src(CalculateDrawSrcRect(pre_chain, m_real_size));
+			const GSVector4 pre_dst(CalculateDrawDstRect(g_gs_device->GetWindowWidth(),
+				g_gs_device->GetWindowHeight(), pre_src, pre_chain->GetSize(), s_display_alignment,
+				g_gs_device->UsesLowerLeftOrigin(), GetVideoMode() == GSVideoMode::SDTV_480P));
+			const GSVector2i on_screen(
+				static_cast<int>(std::floor((pre_dst.z - pre_dst.x) + 0.5f)),
+				static_cast<int>(std::floor((pre_dst.w - pre_dst.y) + 0.5f)));
+			g_gs_device->ApplyShaderChain(on_screen);
+		}
+	}
 
 	// Sharpens biinear at lower resolutions, almost nearest but with more uniform pixels.
 	if (GSConfig.LinearPresent == GSPostBilinearMode::BilinearSharp && (g_gs_device->GetWindowWidth() > fs.x || g_gs_device->GetWindowHeight() > fs.y))
@@ -814,7 +901,9 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 			draw_rect = CalculateDrawDstRect(g_gs_device->GetWindowWidth(), g_gs_device->GetWindowHeight(),
 				src_rect, current->GetSize(), s_display_alignment, g_gs_device->UsesLowerLeftOrigin(),
 				GetVideoMode() == GSVideoMode::SDTV_480P);
-			s_last_draw_rect = draw_rect;
+			s_last_draw_rect = GSConfig.LocalMultiplayerMode == 0 ? draw_rect :
+				GSVector4(0.0f, 0.0f, static_cast<float>(g_gs_device->GetWindowWidth()),
+					static_cast<float>(g_gs_device->GetWindowHeight()));
 
 			if (GSConfig.CASMode != GSCASMode::Disabled && !IsSGSRPresentActive())
 			{
@@ -846,7 +935,7 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 
 				const bool use_sgsr = IsSGSRPresentActive();
 				const float present_shader_parameter = use_sgsr ? static_cast<float>(GSConfig.SGSRMode) : shader_time;
-				g_gs_device->PresentRect(current, src_uv, nullptr, draw_rect,
+				PresentLocalMultiplayerFrame(current, src_uv, draw_rect,
 					use_sgsr ? PresentShader::SGSR : s_tv_shader_indices[GSConfig.TVShader], present_shader_parameter,
 					use_sgsr ? false : (GSConfig.LinearPresent != GSPostBilinearMode::Off));
 			}
@@ -1105,14 +1194,16 @@ void GSRenderer::PresentCurrentFrame()
 			const GSVector4 draw_rect(CalculateDrawDstRect(g_gs_device->GetWindowWidth(), g_gs_device->GetWindowHeight(),
 				src_rect, current->GetSize(), s_display_alignment, g_gs_device->UsesLowerLeftOrigin(),
 				GetVideoMode() == GSVideoMode::SDTV_480P));
-			s_last_draw_rect = draw_rect;
+			s_last_draw_rect = GSConfig.LocalMultiplayerMode == 0 ? draw_rect :
+				GSVector4(0.0f, 0.0f, static_cast<float>(g_gs_device->GetWindowWidth()),
+					static_cast<float>(g_gs_device->GetWindowHeight()));
 
 			const u64 current_time = Common::Timer::GetCurrentValue();
 			const float shader_time = static_cast<float>(Common::Timer::ConvertValueToSeconds(current_time - m_shader_time_start));
 
 			const bool use_sgsr = IsSGSRPresentActive();
 			const float present_shader_parameter = use_sgsr ? static_cast<float>(GSConfig.SGSRMode) : shader_time;
-			g_gs_device->PresentRect(current, src_uv, nullptr, draw_rect,
+			PresentLocalMultiplayerFrame(current, src_uv, draw_rect,
 				use_sgsr ? PresentShader::SGSR : s_tv_shader_indices[GSConfig.TVShader], present_shader_parameter,
 				use_sgsr ? false : (GSConfig.LinearPresent != GSPostBilinearMode::Off));
 		}
@@ -1136,6 +1227,23 @@ void GSTranslateWindowToDisplayCoordinates(float window_x, float window_y, float
 
 	*display_x = rel_x / draw_width;
 	*display_y = rel_y / draw_height;
+}
+
+// Same mapping but without collapsing out-of-display positions to (-1,-1): the caller
+// gets graded coordinates beyond [0,1] (used by the arcade lightgun overscan ring).
+void GSTranslateWindowToDisplayCoordinatesUnclamped(float window_x, float window_y, float* display_x, float* display_y)
+{
+	const float draw_width = s_last_draw_rect.z - s_last_draw_rect.x;
+	const float draw_height = s_last_draw_rect.w - s_last_draw_rect.y;
+	if (draw_width <= 0.0f || draw_height <= 0.0f)
+	{
+		*display_x = -1.0f;
+		*display_y = -1.0f;
+		return;
+	}
+
+	*display_x = (window_x - s_last_draw_rect.x) / draw_width;
+	*display_y = (window_y - s_last_draw_rect.y) / draw_height;
 }
 
 void GSSetDisplayAlignment(GSDisplayAlignment alignment)

@@ -42,6 +42,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 enum class TvStorageRequest {
     BIOS_FILE,
+    ARCADE_BIOS_FILE,
     GAME_FOLDER
 }
 
@@ -56,6 +57,7 @@ fun TvStoragePickerHost(
     request: TvStorageRequest?,
     onDismiss: () -> Unit,
     onBiosSelected: (Uri) -> Unit,
+    onArcadeBiosSelected: (Uri) -> Unit = onBiosSelected,
     onGameFolderSelected: (Uri) -> Unit
 ) {
     if (request == null) return
@@ -77,6 +79,12 @@ fun TvStoragePickerHost(
         result.data?.data?.let(onGameFolderSelected)
         onDismiss()
     }
+    val arcadeBiosLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        result.data?.data?.let(onArcadeBiosSelected)
+        onDismiss()
+    }
 
     fun launch(source: TvStorageSource) {
         val intent = TvStorageAccess.createCompatiblePickerIntent(
@@ -91,6 +99,7 @@ fun TvStoragePickerHost(
         val launched = runCatching {
             when (request) {
                 TvStorageRequest.BIOS_FILE -> biosLauncher.launch(intent)
+                TvStorageRequest.ARCADE_BIOS_FILE -> arcadeBiosLauncher.launch(intent)
                 TvStorageRequest.GAME_FOLDER -> folderLauncher.launch(intent)
             }
         }.isSuccess
@@ -125,10 +134,10 @@ fun TvStoragePickerHost(
             ) {
                 Text(
                     stringResource(
-                        if (request == TvStorageRequest.BIOS_FILE) {
-                            R.string.onboarding_bios_desc
-                        } else {
-                            R.string.onboarding_games_desc
+                        when (request) {
+                            TvStorageRequest.BIOS_FILE -> R.string.onboarding_bios_desc
+                            TvStorageRequest.ARCADE_BIOS_FILE -> R.string.onboarding_arcade_bios_desc
+                            TvStorageRequest.GAME_FOLDER -> R.string.onboarding_games_desc
                         }
                     )
                 )
@@ -213,7 +222,8 @@ private object TvStorageAccess {
     private fun createPickerIntent(request: TvStorageRequest, volume: StorageVolume?): Intent {
         val treeIntent = volume?.createOpenDocumentTreeIntent()
         val intent = when (request) {
-            TvStorageRequest.BIOS_FILE -> Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            TvStorageRequest.BIOS_FILE,
+            TvStorageRequest.ARCADE_BIOS_FILE -> Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "*/*"
                 treeIntent?.initialUri()?.let { putExtra(DocumentsContract.EXTRA_INITIAL_URI, it) }

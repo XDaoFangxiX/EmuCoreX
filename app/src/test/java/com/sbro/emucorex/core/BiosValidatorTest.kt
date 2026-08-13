@@ -98,4 +98,20 @@ class BiosValidatorTest {
     fun unrelatedBinaryIsRejected() {
         assertFalse(BiosValidator.isUsableMainBiosImage("game.bin", 4L * 1024L * 1024L))
     }
+
+    @Test
+    fun knownSystem246ArcadeBiosShapeIsRecognized() {
+        assertTrue(ArcadeBiosValidator.isKnownArcadeBiosShape("r27v1602f.7d", 2L * 1024L * 1024L))
+    }
+
+    @Test
+    fun knownSystem256ArcadeBiosShapeIsRecognizedCaseInsensitively() {
+        assertTrue(ArcadeBiosValidator.isKnownArcadeBiosShape("R27V1602F.8G", 2L * 1024L * 1024L))
+    }
+
+    @Test
+    fun arcadeBiosShapeRejectsRetailBiosAndWrongSize() {
+        assertFalse(ArcadeBiosValidator.isKnownArcadeBiosShape("SCPH-39001.bin", 2L * 1024L * 1024L))
+        assertFalse(ArcadeBiosValidator.isKnownArcadeBiosShape("r27v1602f.7d", 4L * 1024L * 1024L))
+    }
 }

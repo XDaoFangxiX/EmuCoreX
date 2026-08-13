@@ -497,6 +497,31 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_sbro_emucorex_core_NativeApp_isBi
 	close(fd);
 	return valid ? JNI_TRUE : JNI_FALSE;
 }
+extern "C" JNIEXPORT jint JNICALL Java_com_sbro_emucorex_core_NativeApp_getBiosTypePath(JNIEnv* env, jclass, jstring path)
+{
+	u32 version = 0;
+	u32 region = 0;
+	std::string description;
+	std::string zone;
+	if (!IsBIOS(JStringToString(env, path).c_str(), version, description, region, zone))
+		return 0;
+	return (zone == "COH-H") ? 2 : 1;
+}
+extern "C" JNIEXPORT jint JNICALL Java_com_sbro_emucorex_core_NativeApp_getBiosTypeFd(JNIEnv*, jclass, jint fd)
+{
+	if (fd < 0)
+		return 0;
+
+	char path[64];
+	std::snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
+	u32 version = 0;
+	u32 region = 0;
+	std::string description;
+	std::string zone;
+	const bool valid = IsBIOS(path, version, description, region, zone);
+	close(fd);
+	return valid ? ((zone == "COH-H") ? 2 : 1) : 0;
+}
 extern "C" JNIEXPORT void JNICALL Java_com_sbro_emucorex_core_NativeApp_setPerformanceMetricsEnabled(JNIEnv*, jclass, jboolean visible, jboolean detailed, jboolean gpu_timing)
 {
 	emucorex::android::SetPerformanceMetricsCallbackEnabled(

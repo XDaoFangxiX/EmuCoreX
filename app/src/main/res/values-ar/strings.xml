@@ -2420,4 +2420,17 @@
     <string name="network_guide_internet_requirements">يحتاج كلا اللاعبين إلى نفس إصدار اللعبة واتصال إنترنت مستقر. قد يلزم ترحيل TURN إذا كان الاتصال المباشر محظورًا.</string>
     <string name="network_guide_internet_steps">1. يقوم المضيف بإنشاء غرفة ويشارك الرمز المكون من 8 أحرف.\n2. يقوم الضيف بإدخال الرمز وينتظر الاتصال.\n3. يقوم كلا اللاعبين بتشغيل نفس اللعبة.\n4. افتح وضع LAN الخاص باللعبة.\n5. يقوم المضيف بإنشاء تطابق؛ يبحث الضيف عنه وينضم إليه.</string>
     <string name="network_guide_internet_limits">يجب أن تدعم اللعبة اللعب عبر شبكة LAN أو ارتباط النظام. تتم إضافة زمن الوصول إلى الإنترنت إلى بروتوكول الشبكة الخاص باللعبة. قد تتطلب شبكات الشركات أو شبكات الناقل أو الشبكات المقيدة بشدة مرحل TURN.</string>
+    <string name="settings_arcade_section_title">Namco System 246/256</string>
+    <string name="settings_arcade_bios_path">BIOS أركيد (COH-H)</string>
+    <string name="settings_help_arcade_bios_path">حدد نسخة قانونية من BIOS الأركيد COH-H. لا يمكن لـ BIOS عادي لجهاز PS2 تشغيل ألعاب Namco System 246/256.</string>
+    <string name="settings_arcade_setup_note">لألعاب أركيد Namco فقط. أضف إلى مكتبة الألعاب المجلد الذي يحتوي على كل ملف .acgame وملفات ELF والوسائط والدونجل والبطاقات المشار إليها. ينتقل EmuCoreX تلقائيًا إلى هذا BIOS عند تشغيل .acgame.</string>
+    <string name="settings_arcade_bios_picker_title">اختيار BIOS أركيد Namco</string>
+    <string name="settings_arcade_bios_picker_desc">اختر نسخة BIOS COH-H بحجم 2 MiB من جهاز تملكه، مثل r27v1602f.7d لنظام 246 أو r27v1602f.8g لنظام 256.</string>
+    <string name="settings_arcade_bios_remove">إزالة</string>
+    <string name="onboarding_arcade_bios_title">BIOS لنظام Namco System 246/256</string>
+    <string name="onboarding_arcade_bios_desc">اختياري. أضف BIOS أركيد COH-H فقط إذا أردت تشغيل عناوين Namco System 246/256 بصيغة .acgame.</string>
+    <string name="onboarding_status_optional">اختياري</string>
+    <string name="onboarding_arcade_bios_invalid">ليس BIOS أركيد COH-H صالحًا</string>
+    <string name="emulation_arcade_bios_missing">تحتاج لعبة Namco System 246/256 هذه إلى BIOS أركيد COH-H صالح. أضفه من الإعدادات › المكتبة › Namco System 246/256.</string>
+    <string name="settings_arcade_controls_note">عناصر تحكم الأركيد: يضيف L3 عملة، ويبدّل R3 وضع الاختبار. تتبع بقية العناصر تخطيط JVS الذي يحدده ملف اللعبة.</string>
 </resources>

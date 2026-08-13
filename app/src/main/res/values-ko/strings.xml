@@ -2415,4 +2415,17 @@
     <string name="network_guide_internet_requirements">두 플레이어 모두 동일한 게임 버전과 안정적인 인터넷이 필요합니다. 직접 연결이 차단되면 TURN 릴레이가 필요할 수 있습니다.</string>
     <string name="network_guide_internet_steps">1. 호스트가 방을 생성하고 8자리 코드를 공유합니다.\n2. 게스트는 코드를 입력하고 연결될 때까지 기다립니다.\n3. 두 플레이어 모두 동일한 게임을 시작합니다.\n4. 게임의 LAN 모드를 엽니다.\n5. 호스트가 일치 항목을 만듭니다. 게스트가 검색하여 참여합니다.</string>
     <string name="network_guide_internet_limits">게임은 LAN 또는 시스템 연결 플레이를 지원해야 합니다. 게임 자체 네트워크 프로토콜에 인터넷 대기 시간이 추가됩니다. 기업, 통신업체 등급 또는 엄격하게 제한된 네트워크에는 TURN 릴레이가 필요할 수 있습니다.</string>
+    <string name="settings_arcade_section_title">Namco System 246/256</string>
+    <string name="settings_arcade_bios_path">아케이드 BIOS(COH-H)</string>
+    <string name="settings_help_arcade_bios_path">합법적으로 덤프한 COH-H 아케이드 BIOS를 선택하세요. 일반 PS2 BIOS로는 Namco System 246/256 게임을 실행할 수 없습니다.</string>
+    <string name="settings_arcade_setup_note">Namco 아케이드 게임 전용입니다. 각 .acgame 매니페스트와 참조된 ELF, 미디어, 동글, 카드 파일이 들어 있는 폴더를 게임 라이브러리에 추가하세요. EmuCoreX는 .acgame 실행 시 이 BIOS로 자동 전환합니다.</string>
+    <string name="settings_arcade_bios_picker_title">Namco 아케이드 BIOS 선택</string>
+    <string name="settings_arcade_bios_picker_desc">소유한 하드웨어에서 덤프한 2 MiB COH-H BIOS를 선택하세요. System 246용 r27v1602f.7d 또는 System 256용 r27v1602f.8g 등이 있습니다.</string>
+    <string name="settings_arcade_bios_remove">제거</string>
+    <string name="onboarding_arcade_bios_title">Namco System 246/256 BIOS</string>
+    <string name="onboarding_arcade_bios_desc">선택 사항입니다. Namco System 246/256 .acgame 타이틀을 실행하려는 경우에만 COH-H 아케이드 BIOS를 추가하세요.</string>
+    <string name="onboarding_status_optional">선택 사항</string>
+    <string name="onboarding_arcade_bios_invalid">유효한 COH-H 아케이드 BIOS가 아닙니다</string>
+    <string name="emulation_arcade_bios_missing">이 Namco System 246/256 게임에는 유효한 COH-H 아케이드 BIOS가 필요합니다. 설정 › 라이브러리 › Namco System 246/256에서 추가하세요.</string>
+    <string name="settings_arcade_controls_note">아케이드 조작: L3는 코인을 넣고 R3는 테스트 모드를 전환합니다. 나머지 조작은 매니페스트가 선택한 JVS 레이아웃을 따릅니다.</string>
 </resources>

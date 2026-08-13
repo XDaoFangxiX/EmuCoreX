@@ -62,6 +62,7 @@ import androidx.compose.material.icons.rounded.RadioButtonChecked
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.VideogameAsset
 import com.sbro.emucorex.ui.common.AppAlertDialog as AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -249,6 +250,11 @@ fun OnboardingScreen(
     ) { uri: Uri? ->
         uri?.let(viewModel::setBiosPath)
     }
+    val arcadeBiosPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let(viewModel::setArcadeBiosPath)
+    }
 
     val gamePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -260,12 +266,19 @@ fun OnboardingScreen(
         request = tvStorageRequest,
         onDismiss = { tvStorageRequest = null },
         onBiosSelected = viewModel::setBiosPath,
+        onArcadeBiosSelected = viewModel::setArcadeBiosPath,
         onGameFolderSelected = viewModel::setGamePath
     )
     val launchBiosPicker = rememberDebouncedClick(
         onClick = {
             if (tvUiEnabled) tvStorageRequest = TvStorageRequest.BIOS_FILE
             else biosPicker.launch(arrayOf("*/*"))
+        }
+    )
+    val launchArcadeBiosPicker = rememberDebouncedClick(
+        onClick = {
+            if (tvUiEnabled) tvStorageRequest = TvStorageRequest.ARCADE_BIOS_FILE
+            else arcadeBiosPicker.launch(arrayOf("*/*"))
         }
     )
     val launchGamePicker = rememberDebouncedClick(
@@ -553,13 +566,16 @@ fun OnboardingScreen(
                                         
                                         OnboardingSetupContent(
                                             biosPath = uiState.biosPath,
+                                            arcadeBiosPath = uiState.arcadeBiosPath,
                                             gamePath = uiState.gamePath,
                                             gamePaths = uiState.gamePaths,
                                             emulatorDataPath = uiState.emulatorDataPath,
                                             sdCardDataPath = uiState.sdCardDataPath,
                                             biosValid = uiState.biosValid,
+                                            arcadeBiosValid = uiState.arcadeBiosValid,
                                             gamePathValid = uiState.gamePathValid,
                                             launchBiosPicker = launchBiosPicker,
+                                            launchArcadeBiosPicker = launchArcadeBiosPicker,
                                             launchGamePicker = launchGamePicker,
                                             onRemoveGamePath = viewModel::removeGamePath,
                                             openEmulatorDataLocationDialog = openEmulatorDataLocationDialog,
@@ -695,13 +711,16 @@ fun OnboardingScreen(
                                 Spacer(modifier = Modifier.height(32.dp))
                                 OnboardingSetupContent(
                                     biosPath = uiState.biosPath,
+                                    arcadeBiosPath = uiState.arcadeBiosPath,
                                     gamePath = uiState.gamePath,
                                     gamePaths = uiState.gamePaths,
                                     emulatorDataPath = uiState.emulatorDataPath,
                                     sdCardDataPath = uiState.sdCardDataPath,
                                     biosValid = uiState.biosValid,
+                                    arcadeBiosValid = uiState.arcadeBiosValid,
                                     gamePathValid = uiState.gamePathValid,
                                     launchBiosPicker = launchBiosPicker,
+                                    launchArcadeBiosPicker = launchArcadeBiosPicker,
                                     launchGamePicker = launchGamePicker,
                                     onRemoveGamePath = viewModel::removeGamePath,
                                     openEmulatorDataLocationDialog = openEmulatorDataLocationDialog,
@@ -1274,13 +1293,16 @@ private fun OnboardingNavigation(
 @Composable
 private fun OnboardingSetupContent(
     biosPath: String?,
+    arcadeBiosPath: String?,
     gamePath: String?,
     gamePaths: List<String>,
     emulatorDataPath: String?,
     sdCardDataPath: String?,
     biosValid: Boolean,
+    arcadeBiosValid: Boolean,
     gamePathValid: Boolean,
     launchBiosPicker: () -> Unit,
+    launchArcadeBiosPicker: () -> Unit,
     launchGamePicker: () -> Unit,
     onRemoveGamePath: (String) -> Unit,
     openEmulatorDataLocationDialog: () -> Unit,
@@ -1332,6 +1354,29 @@ private fun OnboardingSetupContent(
                 },
                 onClick = launchBiosPicker,
                 modifier = Modifier.focusRequester(firstSetupFocusRequester)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            SetupCard(
+                icon = Icons.Rounded.VideogameAsset,
+                title = stringResource(R.string.onboarding_arcade_bios_title),
+                description = if (arcadeBiosPath == null) {
+                    stringResource(R.string.onboarding_arcade_bios_desc)
+                } else {
+                    DocumentPathResolver.getFallbackDisplayName(arcadeBiosPath)
+                },
+                status = when {
+                    arcadeBiosPath == null -> stringResource(R.string.onboarding_status_optional)
+                    arcadeBiosValid -> stringResource(R.string.onboarding_status_ready)
+                    else -> stringResource(R.string.onboarding_arcade_bios_invalid)
+                },
+                statusColor = when {
+                    arcadeBiosPath == null -> MaterialTheme.colorScheme.secondary
+                    arcadeBiosValid -> Color(0xFF1B8A5A)
+                    else -> MaterialTheme.colorScheme.error
+                },
+                onClick = launchArcadeBiosPicker
             )
 
             Spacer(modifier = Modifier.height(8.dp))

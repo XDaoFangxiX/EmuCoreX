@@ -2430,4 +2430,17 @@
     <string name="network_guide_internet_requirements">Kedua pemain memerlukan versi game yang sama dan internet stabil. Relay TURN mungkin diperlukan jika koneksi langsung diblokir.</string>
     <string name="network_guide_internet_steps">1. Tuan rumah membuat ruangan dan membagikan kode 8 karakter.\n2. Tamu memasukkan kode dan menunggu Terhubung.\n3. Kedua pemain meluncurkan game yang sama.\n4. Buka mode LAN game.\n5. Tuan rumah menciptakan kecocokan; tamu mencari dan bergabung dengannya.</string>
     <string name="network_guide_internet_limits">Game harus mendukung permainan LAN atau sistem-link. Latensi internet ditambahkan ke protokol jaringan game itu sendiri. Jaringan korporat, tingkat operator, atau jaringan yang sangat terbatas mungkin memerlukan relai TURN.</string>
+    <string name="settings_arcade_section_title">Namco System 246/256</string>
+    <string name="settings_arcade_bios_path">BIOS arcade (COH-H)</string>
+    <string name="settings_help_arcade_bios_path">Pilih dump BIOS arcade COH-H yang diperoleh secara legal. BIOS PS2 biasa tidak dapat menjalankan game Namco System 246/256.</string>
+    <string name="settings_arcade_setup_note">Hanya untuk game arcade Namco. Tambahkan folder yang berisi setiap manifes .acgame beserta file ELF, media, dongle, dan kartu yang dirujuk ke pustaka game. EmuCoreX otomatis beralih ke BIOS ini saat memulai .acgame.</string>
+    <string name="settings_arcade_bios_picker_title">Pilih BIOS arcade Namco</string>
+    <string name="settings_arcade_bios_picker_desc">Pilih dump BIOS COH-H 2 MiB dari perangkat keras milik Anda, seperti r27v1602f.7d untuk System 246 atau r27v1602f.8g untuk System 256.</string>
+    <string name="settings_arcade_bios_remove">Hapus</string>
+    <string name="onboarding_arcade_bios_title">BIOS Namco System 246/256</string>
+    <string name="onboarding_arcade_bios_desc">Opsional. Tambahkan BIOS arcade COH-H hanya jika Anda ingin memulai judul .acgame Namco System 246/256.</string>
+    <string name="onboarding_status_optional">Opsional</string>
+    <string name="onboarding_arcade_bios_invalid">Bukan BIOS arcade COH-H yang valid</string>
+    <string name="emulation_arcade_bios_missing">Game Namco System 246/256 ini memerlukan BIOS arcade COH-H yang valid. Tambahkan di Setelan › Pustaka › Namco System 246/256.</string>
+    <string name="settings_arcade_controls_note">Kontrol arcade: L3 memasukkan koin; R3 mengaktifkan atau menonaktifkan mode uji. Kontrol lain mengikuti tata letak JVS yang dipilih manifes.</string>
 </resources>

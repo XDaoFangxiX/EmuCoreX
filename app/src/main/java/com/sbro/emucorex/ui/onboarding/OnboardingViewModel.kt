@@ -6,10 +6,12 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sbro.emucorex.core.BiosValidator
+import com.sbro.emucorex.core.ArcadeBiosValidator
 import com.sbro.emucorex.core.AppAnalytics
 import com.sbro.emucorex.core.EmulatorBridge
 import com.sbro.emucorex.core.EmulatorDataLocation
 import com.sbro.emucorex.core.EmulatorStorage
+import com.sbro.emucorex.core.DocumentPathResolver
 import com.sbro.emucorex.core.GpuHardwareProfiles
 import com.sbro.emucorex.core.PerformanceProfiles
 import com.sbro.emucorex.core.ProProductOffer
@@ -30,11 +32,13 @@ import kotlinx.coroutines.withContext
 data class OnboardingUiState(
     val performanceProfile: Int = PerformanceProfiles.SAFE,
     val biosPath: String? = null,
+    val arcadeBiosPath: String? = null,
     val gamePath: String? = null,
     val gamePaths: List<String> = emptyList(),
     val emulatorDataPath: String? = null,
     val sdCardDataPath: String? = null,
     val biosValid: Boolean = false,
+    val arcadeBiosValid: Boolean = false,
     val gamePathValid: Boolean = false,
     val canContinue: Boolean = false,
     val currentPage: Int = 0,
@@ -88,6 +92,14 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                         biosPath = path,
                         biosValid = biosValid
                     )
+                }
+            }
+            launch {
+                preferences.arcadeBiosPath.distinctUntilChanged().collect { path ->
+                    val valid = withContext(Dispatchers.IO) {
+                        ArcadeBiosValidator.hasUsableArcadeBios(getApplication(), path)
+                    }
+                    updateState(arcadeBiosPath = path, arcadeBiosValid = valid)
                 }
             }
             launch {
@@ -168,6 +180,28 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun setArcadeBiosPath(uri: Uri) {
+        val application = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            val previousPath = preferences.arcadeBiosPath.first()
+            StorageAccess.takePersistableReadPermission(application, uri)
+            preferences.setArcadeBiosPath(uri.toString())
+            if (previousPath != uri.toString()) {
+                StorageAccess.releasePersistedPermission(application, previousPath)
+            }
+            DocumentPathResolver.prepareArcadeBiosSelection(application, uri.toString())
+        }
+    }
+
+    fun clearArcadeBiosPath() {
+        val application = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            val previousPath = preferences.arcadeBiosPath.first()
+            preferences.setArcadeBiosPath(null)
+            StorageAccess.releasePersistedPermission(application, previousPath)
+        }
+    }
+
     fun removeGamePath(path: String) {
         viewModelScope.launch(Dispatchers.IO) {
             preferences.removeGamePath(path)
@@ -226,11 +260,13 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
     private fun updateState(
         performanceProfile: Int = _uiState.value.performanceProfile,
         biosPath: String? = _uiState.value.biosPath,
+        arcadeBiosPath: String? = _uiState.value.arcadeBiosPath,
         gamePath: String? = _uiState.value.gamePath,
         gamePaths: List<String> = _uiState.value.gamePaths,
         emulatorDataPath: String? = _uiState.value.emulatorDataPath,
         sdCardDataPath: String? = _uiState.value.sdCardDataPath,
         biosValid: Boolean = _uiState.value.biosValid,
+        arcadeBiosValid: Boolean = _uiState.value.arcadeBiosValid,
         gamePathValid: Boolean = _uiState.value.gamePathValid,
         currentPage: Int = _uiState.value.currentPage,
         isProUnlocked: Boolean = _uiState.value.isProUnlocked,
@@ -246,11 +282,13 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.value = OnboardingUiState(
             performanceProfile = performanceProfile,
             biosPath = biosPath,
+            arcadeBiosPath = arcadeBiosPath,
             gamePath = gamePath,
             gamePaths = gamePaths,
             emulatorDataPath = emulatorDataPath,
             sdCardDataPath = sdCardDataPath,
             biosValid = biosValid,
+            arcadeBiosValid = arcadeBiosValid,
             gamePathValid = gamePathValid,
             canContinue = biosValid && gamePathValid,
             currentPage = currentPage.coerceIn(0, 5),

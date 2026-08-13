@@ -8,6 +8,13 @@ import org.junit.Test
 
 class DocumentPathResolverTest {
     @Test
+    fun arcadeManifestNamesAreRecognizedCaseInsensitively() {
+        assertTrue(DocumentPathResolver.isArcadeManifestName("tekken5.acgame"))
+        assertTrue(DocumentPathResolver.isArcadeManifestName("NAMCO.ACGAME"))
+        assertFalse(DocumentPathResolver.isArcadeManifestName("tekken5.iso"))
+    }
+
+    @Test
     fun atomicBiosDirectoryReplacementPromotesCompleteStagingDirectory() {
         val parent = Files.createTempDirectory("bios-replace").toFile()
         try {

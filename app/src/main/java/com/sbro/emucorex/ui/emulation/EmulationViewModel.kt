@@ -13,6 +13,7 @@ import com.sbro.emucorex.core.AndroidGamePerformance
 import com.sbro.emucorex.core.AndroidGamePhase
 import com.sbro.emucorex.core.AppAnalytics
 import com.sbro.emucorex.core.AudioDefaults
+import com.sbro.emucorex.core.ArcadeBiosValidator
 import com.sbro.emucorex.core.BiosValidator
 import com.sbro.emucorex.core.DocumentPathResolver
 import com.sbro.emucorex.core.EmulatorBridge
@@ -272,6 +273,7 @@ data class EmulationUiState(
 private data class EmulationLaunchConfig(
     val performanceProfile: Int,
     val biosPath: String?,
+    val arcadeBiosPath: String?,
     val emulatorDataPath: String?,
     val memoryCardSlot1: String?,
     val memoryCardSlot2: String?,
@@ -1498,12 +1500,15 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                 )
 
                 val config = loadLaunchConfig()
+                val isArcadeLaunch = !bootToBios && !bootSmokeProbe &&
+                    DocumentPathResolver.isArcadeManifestPath(getApplication(), path)
+                val effectiveBiosPath = if (isArcadeLaunch) config.arcadeBiosPath else config.biosPath
                 analyticsPerformanceProfile = config.performanceProfile
                 currentAnalyticsAudioBackend = config.audioBackend
                 val renderer = rendererOverride ?: config.renderer
                 Log.i(
                     TAG,
-                    "Launch config loaded bios=${config.biosPath} renderer=$renderer override=${rendererOverride != null} eeJit=${config.enableEeRecompiler} iopJit=${config.enableIopRecompiler}"
+                    "Launch config loaded biosKind=${if (isArcadeLaunch) "namco_arcade" else "retail_ps2"} renderer=$renderer override=${rendererOverride != null} eeJit=${config.enableEeRecompiler} iopJit=${config.enableIopRecompiler}"
                 )
                 val enableEeRecompiler = enableEeRecompilerOverride ?: config.enableEeRecompiler
                 val enableIopRecompiler = enableIopRecompilerOverride ?: config.enableIopRecompiler
@@ -1513,16 +1518,22 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                 val enableMtvu = enableMtvuOverride ?: config.mtvu
 
                 if (!autotestMode) {
-                    val resolvedBiosPath = DocumentPathResolver.prepareBiosDirectory(getApplication(), config.biosPath)
-                        ?: config.biosPath?.let(DocumentPathResolver::resolveDirectoryPath)
-                    val biosDirExists = !resolvedBiosPath.isNullOrBlank() && File(resolvedBiosPath).exists()
-                    val biosLooksUsable = BiosValidator.hasUsableBiosFiles(getApplication(), config.biosPath)
-                    if (!biosDirExists || !biosLooksUsable) {
+                    val preparedBios = if (isArcadeLaunch) {
+                        DocumentPathResolver.prepareArcadeBiosSelection(getApplication(), effectiveBiosPath)
+                    } else {
+                        DocumentPathResolver.prepareBiosSelection(getApplication(), effectiveBiosPath)
+                    }
+                    val biosLooksUsable = if (isArcadeLaunch) {
+                        ArcadeBiosValidator.hasUsableArcadeBios(getApplication(), effectiveBiosPath)
+                    } else {
+                        BiosValidator.hasUsableBiosFiles(getApplication(), effectiveBiosPath)
+                    }
+                    if (preparedBios == null || !biosLooksUsable) {
                         AppAnalytics.logEmulationStartFailed(analyticsLaunchType, "bios_missing")
                         _uiState.value = _uiState.value.copy(
                             isStarting = false,
                             statusMessage = null,
-                            toastMessage = "bios_missing"
+                            toastMessage = if (isArcadeLaunch) "arcade_bios_missing" else "bios_missing"
                         )
                         delay(2500.milliseconds)
                         _uiState.value = _uiState.value.copy(toastMessage = null)
@@ -1536,7 +1547,8 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
                 delay(200.milliseconds)
 
                 EmulatorBridge.applyRuntimeConfig(
-                    biosPath = config.biosPath,
+                    biosPath = effectiveBiosPath,
+                    arcadeBios = isArcadeLaunch,
                     emulatorDataPath = config.emulatorDataPath,
                     memoryCardSlot1 = config.memoryCardSlot1,
                     memoryCardSlot2 = config.memoryCardSlot2,
@@ -3716,6 +3728,7 @@ class EmulationViewModel(application: Application) : AndroidViewModel(applicatio
         val mergedConfig = EmulationLaunchConfig(
             performanceProfile = settings.performanceProfile,
             biosPath = settings.biosPath,
+            arcadeBiosPath = settings.arcadeBiosPath,
             emulatorDataPath = settings.emulatorDataPath,
             memoryCardSlot1 = ensuredAssignments.slot1,
             memoryCardSlot2 = ensuredAssignments.slot2,

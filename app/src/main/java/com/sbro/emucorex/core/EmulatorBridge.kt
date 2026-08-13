@@ -305,6 +305,7 @@ object EmulatorBridge {
 
     suspend fun applyRuntimeConfig(
         biosPath: String?,
+        arcadeBios: Boolean = false,
         emulatorDataPath: String? = null,
         renderer: Int,
         upscaleMultiplier: Float,
@@ -433,11 +434,19 @@ object EmulatorBridge {
         val context = getContext() ?: return@withContext
         NetworkAdapterCollector.collectAdapters(context)
         val resolvedRenderer = normalizeRenderer(renderer)
-        val preparedBios = DocumentPathResolver.prepareBiosSelection(context, biosPath)
+        val preparedBios = if (arcadeBios) {
+            DocumentPathResolver.prepareArcadeBiosSelection(context, biosPath)
+        } else {
+            DocumentPathResolver.prepareBiosSelection(context, biosPath)
+        }
         val resolvedBiosPath = preparedBios?.directoryPath
             ?: biosPath?.let(DocumentPathResolver::resolveDirectoryPath)
         val preferredBiosFile = preparedBios?.fileName
-            ?: DocumentPathResolver.findPreferredBiosFileName(resolvedBiosPath)
+            ?: if (arcadeBios) {
+                DocumentPathResolver.findPreferredArcadeBiosFileName(resolvedBiosPath)
+            } else {
+                DocumentPathResolver.findPreferredBiosFileName(resolvedBiosPath)
+            }
         val runtimeDirectories = EmulatorStorage.runtimeDirectories(context, emulatorDataPath)
         val manualHardwareFixes = GsHackDefaults.shouldEnableManualHardwareFixes(
             cpuSpriteRenderSize = cpuSpriteRenderSize,
@@ -702,6 +711,7 @@ object EmulatorBridge {
                     add(settingOp("EmuCore/GS", "UserHacks_NativePaletteDraw", "bool", nativePaletteDraw.toString()))
                 }
                 add(settingOp("EmuCoreX", "BiosSource", "string", biosPath.orEmpty()))
+                add(settingOp("EmuCoreX", "BiosKind", "string", if (arcadeBios) "namco_arcade" else "retail_ps2"))
                 add(settingOp("EmuCoreX", "Renderer", "int", resolvedRenderer.toString()))
                 add(settingOp("EmuCoreX", "UpscaleMultiplier", "float", upscaleMultiplier.toString()))
                 add(settingOp("EmuCoreX", "GpuHardwareProfile", "int", normalizedGpuHardwareProfile.toString()))

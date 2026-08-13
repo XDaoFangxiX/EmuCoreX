@@ -117,6 +117,10 @@ object NativeApp {
     @JvmStatic external fun isBiosPath(path: String): Boolean
     /** Takes ownership of [fd] and always closes it before returning. */
     @JvmStatic external fun isBiosFd(fd: Int): Boolean
+    /** Returns 0 for invalid, 1 for retail PS2, and 2 for Namco COH-H arcade BIOS images. */
+    @JvmStatic external fun getBiosTypePath(path: String): Int
+    /** Takes ownership of [fd] and always closes it before returning. */
+    @JvmStatic external fun getBiosTypeFd(fd: Int): Int
     @JvmStatic external fun setPerformanceMetricsEnabled(visible: Boolean, detailed: Boolean, gpuTiming: Boolean)
     @JvmStatic external fun getPerformanceMetricsSnapshot(): String?
     @JvmStatic external fun getDisplayDrawRect(): FloatArray?

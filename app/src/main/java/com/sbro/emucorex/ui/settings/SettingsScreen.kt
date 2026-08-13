@@ -97,6 +97,7 @@ import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Vibration
+import androidx.compose.material.icons.rounded.VideogameAsset
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.WarningAmber
@@ -275,6 +276,7 @@ fun SettingsScreen(
     val showCoverUrlDialog = remember { mutableStateOf(false) }
     var showClearCoverCacheDialog by rememberSaveable { mutableStateOf(false) }
     val showBiosDialog = remember { mutableStateOf(false) }
+    val showArcadeBiosDialog = remember { mutableStateOf(false) }
     var showEmulatorDataLocationDialog by remember { mutableStateOf(false) }
     val pendingCoverUrl = remember { mutableStateOf("") }
     var searchEnabled by remember { mutableStateOf(false) }
@@ -338,6 +340,9 @@ fun SettingsScreen(
     val biosPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? -> uri?.let(viewModel::setBiosPath) }
+    val arcadeBiosPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? -> uri?.let(viewModel::setArcadeBiosPath) }
 
     val gamePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -364,6 +369,7 @@ fun SettingsScreen(
         request = tvStorageRequest,
         onDismiss = { tvStorageRequest = null },
         onBiosSelected = viewModel::setBiosPath,
+        onArcadeBiosSelected = viewModel::setArcadeBiosPath,
         onGameFolderSelected = viewModel::setGamePath
     )
     val launchBiosPicker = rememberDebouncedClick(
@@ -373,6 +379,13 @@ fun SettingsScreen(
         }
     )
     val openBiosDialog = rememberDebouncedClick(onClick = { showBiosDialog.value = true })
+    val launchArcadeBiosPicker = rememberDebouncedClick(
+        onClick = {
+            if (tvUiEnabled) tvStorageRequest = TvStorageRequest.ARCADE_BIOS_FILE
+            else arcadeBiosPicker.launch(arrayOf("*/*"))
+        }
+    )
+    val openArcadeBiosDialog = rememberDebouncedClick(onClick = { showArcadeBiosDialog.value = true })
     val launchGamePicker = rememberDebouncedClick(
         onClick = {
             if (tvUiEnabled) tvStorageRequest = TvStorageRequest.GAME_FOLDER
@@ -517,6 +530,7 @@ fun SettingsScreen(
                 selectedTab = selectedTab,
                 context = context,
                 launchBiosPicker = openBiosDialog,
+                launchArcadeBiosPicker = openArcadeBiosDialog,
                 launchGamePicker = launchGamePicker,
                 openEmulatorDataLocationDialog = openEmulatorDataLocationDialog,
                 launchHomeBackgroundPicker = {
@@ -836,6 +850,84 @@ fun SettingsScreen(
         )
     }
 
+    if (showArcadeBiosDialog.value) {
+        val arcadeBiosDisplayName = uiState.arcadeBiosPath
+            ?.let { DocumentPathResolver.getFallbackDisplayName(it) }
+            ?: stringResource(R.string.onboarding_status_optional)
+        AlertDialog(
+            onDismissRequest = { showArcadeBiosDialog.value = false },
+            title = { Text(stringResource(R.string.settings_arcade_bios_picker_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_arcade_bios_picker_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.settings_bios_picker_current),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = arcadeBiosDisplayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (uiState.arcadeBiosPath != null && !uiState.arcadeBiosValid) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                }
+                            )
+                            if (uiState.arcadeBiosPath != null && !uiState.arcadeBiosValid) {
+                                Text(
+                                    text = stringResource(R.string.onboarding_arcade_bios_invalid),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showArcadeBiosDialog.value = false
+                        launchArcadeBiosPicker()
+                    }
+                ) {
+                    Text(stringResource(R.string.settings_bios_picker_action))
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (uiState.arcadeBiosPath != null) {
+                        TextButton(
+                            onClick = {
+                                showArcadeBiosDialog.value = false
+                                viewModel.clearArcadeBiosPath()
+                            }
+                        ) {
+                            Text(stringResource(R.string.settings_arcade_bios_remove))
+                        }
+                    }
+                    TextButton(onClick = { showArcadeBiosDialog.value = false }) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                }
+            }
+        )
+    }
+
     if (showCoverUrlDialog.value) {
         val coverUrlFocusRequester = remember { FocusRequester() }
         val exampleBundle = remember {
@@ -1084,6 +1176,7 @@ private fun SettingsContent(
     searchQuery: String,
     context: android.content.Context,
     launchBiosPicker: () -> Unit,
+    launchArcadeBiosPicker: () -> Unit,
     launchGamePicker: () -> Unit,
     openEmulatorDataLocationDialog: () -> Unit,
     launchHomeBackgroundPicker: () -> Unit,
@@ -2236,6 +2329,9 @@ private fun SettingsContent(
                         uiState.biosPath?.let { DocumentPathResolver.getFallbackDisplayName(it) }
                             ?: notSetLabel
                     }
+                    val arcadeBiosDisplayName = remember(uiState.arcadeBiosPath) {
+                        uiState.arcadeBiosPath?.let(DocumentPathResolver::getFallbackDisplayName)
+                    }
                     val gameDisplayName = if (uiState.gamePaths.isEmpty()) {
                         notSetLabel
                     } else {
@@ -2304,6 +2400,26 @@ private fun SettingsContent(
                             value = emulatorDataDisplayName,
                             onClick = openEmulatorDataLocationDialog,
                             helpText = stringResource(R.string.emulator_data_location_description)
+                        )
+                    }
+
+                    SettingsSection(title = stringResource(R.string.settings_arcade_section_title)) {
+                        SettingsItem(
+                            icon = Icons.Rounded.VideogameAsset,
+                            label = stringResource(R.string.settings_arcade_bios_path),
+                            value = when {
+                                arcadeBiosDisplayName == null -> stringResource(R.string.onboarding_status_optional)
+                                uiState.arcadeBiosValid -> arcadeBiosDisplayName
+                                else -> stringResource(R.string.onboarding_arcade_bios_invalid)
+                            },
+                            onClick = launchArcadeBiosPicker,
+                            helpText = stringResource(R.string.settings_help_arcade_bios_path)
+                        )
+                        SettingsInlineNote(
+                            text = stringResource(R.string.settings_arcade_setup_note)
+                        )
+                        SettingsInlineNote(
+                            text = stringResource(R.string.settings_arcade_controls_note)
                         )
                     }
 
@@ -5200,6 +5316,7 @@ private fun rememberSettingsSearchEntries(): List<SettingsSearchEntry> {
         entry(SettingsTab.Controls, R.string.settings_pad_vibration_test),
         entry(SettingsTab.Controls, R.string.settings_pad_vibration_fallback),
         entry(SettingsTab.Library, R.string.settings_bios_path),
+        entry(SettingsTab.Library, R.string.settings_arcade_bios_path),
         entry(SettingsTab.Library, R.string.settings_game_path),
         entry(SettingsTab.Library, R.string.emulator_data_location_title),
         entry(SettingsTab.Library, R.string.settings_memory_cards_tab),

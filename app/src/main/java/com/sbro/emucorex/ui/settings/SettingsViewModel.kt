@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sbro.emucorex.core.AndroidTouchHaptics
 import com.sbro.emucorex.core.AudioDefaults
+import com.sbro.emucorex.core.ArcadeBiosValidator
 import com.sbro.emucorex.core.AppUpdateRelease
 import com.sbro.emucorex.core.AppUpdateRepository
 import com.sbro.emucorex.core.BiosValidator
@@ -159,6 +160,7 @@ data class SettingsUiState(
     val profilerLogcat: Boolean = false,
     val preferEnglishGameTitles: Boolean = false,
     val biosPath: String? = null,
+    val arcadeBiosPath: String? = null,
     val gamePath: String? = null,
     val gamePaths: List<String> = emptyList(),
     val emulatorDataPath: String? = null,
@@ -166,6 +168,7 @@ data class SettingsUiState(
     val coverDownloadBaseUrl: String? = null,
     val coverArtStyle: Int = AppPreferences.COVER_ART_STYLE_DEFAULT,
     val biosValid: Boolean = false,
+    val arcadeBiosValid: Boolean = false,
     val setupComplete: Boolean = false,
     val appVersion: String = "1.0.0",
     val performanceProfile: Int = PerformanceProfiles.SAFE,
@@ -348,6 +351,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _uiState.value = _uiState.value.copy(biosValid = biosValid)
             }
         }
+        viewModelScope.launch {
+            preferences.arcadeBiosPath.distinctUntilChanged().collect { path ->
+                val valid = withContext(Dispatchers.IO) {
+                    ArcadeBiosValidator.hasUsableArcadeBios(getApplication(), path)
+                }
+                _uiState.value = _uiState.value.copy(arcadeBiosValid = valid)
+            }
+        }
         refreshEmulatorDataLocations()
 
                 viewModelScope.launch {
@@ -440,6 +451,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             profilerLogcat = snapshot.profilerLogcat,
             preferEnglishGameTitles = snapshot.preferEnglishGameTitles,
             biosPath = snapshot.biosPath,
+            arcadeBiosPath = snapshot.arcadeBiosPath,
             gamePath = snapshot.gamePath,
             gamePaths = snapshot.gamePaths,
             emulatorDataPath = snapshot.emulatorDataPath,
@@ -2194,6 +2206,28 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 forceEvenSpritePosition = _uiState.value.forceEvenSpritePosition,
                 nativePaletteDraw = _uiState.value.nativePaletteDraw
             )
+        }
+    }
+
+    fun setArcadeBiosPath(uri: Uri) {
+        val application = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            val previousPath = preferences.arcadeBiosPath.first()
+            StorageAccess.takePersistableReadPermission(application, uri)
+            preferences.setArcadeBiosPath(uri.toString())
+            if (previousPath != uri.toString()) {
+                StorageAccess.releasePersistedPermission(application, previousPath)
+            }
+            DocumentPathResolver.prepareArcadeBiosSelection(application, uri.toString())
+        }
+    }
+
+    fun clearArcadeBiosPath() {
+        val application = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            val previousPath = preferences.arcadeBiosPath.first()
+            preferences.setArcadeBiosPath(null)
+            StorageAccess.releasePersistedPermission(application, previousPath)
         }
     }
 

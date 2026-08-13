@@ -2418,4 +2418,17 @@
     <string name="network_guide_internet_requirements">Beide Spieler benötigen die gleiche Spielversion und eine stabile Internetverbindung. Wenn direkte Peer-to-Peer-Verbindungen blockiert sind, kann TURN nötig sein.</string>
     <string name="network_guide_internet_steps">1. Der Gastgeber erstellt einen Raum und teilt den 8-stelligen Code mit.\n2. Der Gast gibt den Code ein und wartet auf Connected.\n3. Beide Spieler starten dasselbe Spiel.\n4. Öffnen Sie den LAN-Modus des Spiels.\n5. Der Host erstellt eine Übereinstimmung; Der Gast sucht danach und tritt ihm bei.</string>
     <string name="network_guide_internet_limits">Das Spiel muss LAN- oder Systemlink-Spielen unterstützen. Internetlatenz wird zum spieleigenen Netzwerkprotokoll hinzugefügt. Unternehmens-, Carrier-Grade- oder stark eingeschränkte Netzwerke erfordern möglicherweise ein TURN-Relay.</string>
+    <string name="settings_arcade_section_title">Namco System 246/256</string>
+    <string name="settings_arcade_bios_path">Arcade-BIOS (COH-H)</string>
+    <string name="settings_help_arcade_bios_path">Wähle ein legal ausgelesenes COH-H-Arcade-BIOS. Ein normales PS2-BIOS kann Namco-System-246/256-Spiele nicht starten.</string>
+    <string name="settings_arcade_setup_note">Nur für Namco-Arcade-Spiele. Füge den Ordner mit jedem .acgame-Manifest und den referenzierten ELF-, Medien-, Dongle- und Kartendateien zur Spielebibliothek hinzu. EmuCoreX wechselt bei .acgame-Starts automatisch zu diesem BIOS.</string>
+    <string name="settings_arcade_bios_picker_title">Namco-Arcade-BIOS auswählen</string>
+    <string name="settings_arcade_bios_picker_desc">Wähle ein 2-MiB-COH-H-BIOS von eigener Hardware, z. B. r27v1602f.7d für System 246 oder r27v1602f.8g für System 256.</string>
+    <string name="settings_arcade_bios_remove">Entfernen</string>
+    <string name="onboarding_arcade_bios_title">Namco-System-246/256-BIOS</string>
+    <string name="onboarding_arcade_bios_desc">Optional. Füge nur dann ein COH-H-Arcade-BIOS hinzu, wenn du Namco-System-246/256-Titel im .acgame-Format starten möchtest.</string>
+    <string name="onboarding_status_optional">Optional</string>
+    <string name="onboarding_arcade_bios_invalid">Kein gültiges COH-H-Arcade-BIOS</string>
+    <string name="emulation_arcade_bios_missing">Dieses Namco-System-246/256-Spiel benötigt ein gültiges COH-H-Arcade-BIOS. Füge es unter Einstellungen › Bibliothek › Namco System 246/256 hinzu.</string>
+    <string name="settings_arcade_controls_note">Arcade-Steuerung: L3 wirft eine Münze ein, R3 schaltet den Testmodus um. Die übrigen Tasten folgen dem vom Manifest gewählten JVS-Layout.</string>
 </resources>

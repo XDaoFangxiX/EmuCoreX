@@ -129,6 +129,7 @@ data class SettingsSnapshot(
     val gamePaths: List<String> = emptyList(),
     val emulatorDataPath: String? = null,
     val coverDownloadBaseUrl: String? = null,
+    val arcadeCoverDownloadBaseUrl: String? = null,
     val coverArtStyle: Int = AppPreferences.COVER_ART_STYLE_DEFAULT,
     val setupComplete: Boolean = false,
     val enableFastBoot: Boolean = true,
@@ -497,6 +498,7 @@ class AppPreferences(private val context: Context) {
         private val GAME_PATHS = stringPreferencesKey("game_paths")
         private val EMULATOR_DATA_PATH = stringPreferencesKey("emulator_data_path")
         private val COVER_DOWNLOAD_BASE_URL = stringPreferencesKey("cover_download_base_url")
+        private val COVER_DOWNLOAD_ARCADE_BASE_URL = stringPreferencesKey("cover_download_arcade_base_url")
         private val COVER_ART_STYLE = intPreferencesKey("cover_art_style")
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         private val PERFORMANCE_PROFILE = intPreferencesKey("performance_profile")
@@ -1484,6 +1486,10 @@ class AppPreferences(private val context: Context) {
         prefs[COVER_DOWNLOAD_BASE_URL]
     }
 
+    val arcadeCoverDownloadBaseUrl: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[COVER_DOWNLOAD_ARCADE_BASE_URL]
+    }
+
     suspend fun setCoverDownloadBaseUrl(url: String?) {
         context.dataStore.edit { prefs ->
             if (url.isNullOrBlank()) {
@@ -1494,9 +1500,25 @@ class AppPreferences(private val context: Context) {
         }
     }
 
+    suspend fun setArcadeCoverDownloadBaseUrl(url: String?) {
+        context.dataStore.edit { prefs ->
+            if (url.isNullOrBlank()) {
+                prefs.remove(COVER_DOWNLOAD_ARCADE_BASE_URL)
+            } else {
+                prefs[COVER_DOWNLOAD_ARCADE_BASE_URL] = url.trim().trimEnd('/')
+            }
+        }
+    }
+
     fun getCoverDownloadBaseUrlSync(): String? {
         return kotlinx.coroutines.runBlocking {
             context.dataStore.data.map { it[COVER_DOWNLOAD_BASE_URL] }.first()
+        }
+    }
+
+    fun getArcadeCoverDownloadBaseUrlSync(): String? {
+        return kotlinx.coroutines.runBlocking {
+            context.dataStore.data.map { it[COVER_DOWNLOAD_ARCADE_BASE_URL] }.first()
         }
     }
 
@@ -1673,6 +1695,7 @@ class AppPreferences(private val context: Context) {
                 gamePaths = readGamePaths(prefs),
                 emulatorDataPath = prefs[EMULATOR_DATA_PATH],
                 coverDownloadBaseUrl = prefs[COVER_DOWNLOAD_BASE_URL],
+                arcadeCoverDownloadBaseUrl = prefs[COVER_DOWNLOAD_ARCADE_BASE_URL],
                 coverArtStyle = when (prefs[COVER_ART_STYLE]) {
                     COVER_ART_STYLE_DISABLED -> COVER_ART_STYLE_DISABLED
                     COVER_ART_STYLE_3D -> COVER_ART_STYLE_3D
@@ -3555,6 +3578,7 @@ class AppPreferences(private val context: Context) {
             put("gamePaths", JSONArray(readGamePaths(prefs)))
             put("emulatorDataPath", prefs[EMULATOR_DATA_PATH])
             put("coverDownloadBaseUrl", prefs[COVER_DOWNLOAD_BASE_URL])
+            put("arcadeCoverDownloadBaseUrl", prefs[COVER_DOWNLOAD_ARCADE_BASE_URL])
             put("coverArtStyle", prefs[COVER_ART_STYLE] ?: COVER_ART_STYLE_DEFAULT)
             put("onboardingCompleted", prefs[ONBOARDING_COMPLETED] ?: false)
             put("languageTag", prefs[LANGUAGE_TAG])
@@ -3889,6 +3913,9 @@ class AppPreferences(private val context: Context) {
             json.optString("coverDownloadBaseUrl").takeIf { it.isNotBlank() }?.let {
                 prefs[COVER_DOWNLOAD_BASE_URL] = it.trim().trimEnd('/')
             } ?: prefs.remove(COVER_DOWNLOAD_BASE_URL)
+            json.optString("arcadeCoverDownloadBaseUrl").takeIf { it.isNotBlank() }?.let {
+                prefs[COVER_DOWNLOAD_ARCADE_BASE_URL] = it.trim().trimEnd('/')
+            } ?: prefs.remove(COVER_DOWNLOAD_ARCADE_BASE_URL)
             prefs[COVER_ART_STYLE] = when (json.optInt("coverArtStyle", COVER_ART_STYLE_DEFAULT)) {
                 COVER_ART_STYLE_DISABLED -> COVER_ART_STYLE_DISABLED
                 COVER_ART_STYLE_3D -> COVER_ART_STYLE_3D

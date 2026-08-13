@@ -2429,4 +2429,7 @@
     <string name="onboarding_arcade_bios_invalid">Geçerli bir COH-H arcade BIOS değil</string>
     <string name="emulation_arcade_bios_missing">Bu Namco System 246/256 oyunu geçerli bir COH-H arcade BIOS gerektirir. Ayarlar › Kitaplık › Namco System 246/256 bölümünden ekleyin.</string>
     <string name="settings_arcade_controls_note">Arcade kontrolleri: L3 jeton ekler, R3 test modunu açıp kapatır. Diğer kontroller bildirimin seçtiği JVS düzenini izler.</string>
+    <string name="settings_cover_download_arcade_url">Arcade Kapak İndirme URL\'si</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">Özel arcade kapak kaynağı</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">Arcade oyunları için bir veya iki doğrudan temel URL yapıştırın. İki tane kullanırsanız, 2B URL\'yi ilk, 3B URL\'yi ikinci sıraya koyun ve boşlukla ayırın. Yerleşik kaynağı tekrar kullanmak için boş bırakın.</string>
 </resources>

@@ -274,11 +274,13 @@ fun SettingsScreen(
     var showBackupExportDialog by rememberSaveable { mutableStateOf(false) }
     var includeSaveStatesInBackup by rememberSaveable { mutableStateOf(false) }
     val showCoverUrlDialog = remember { mutableStateOf(false) }
+    val showArcadeCoverUrlDialog = remember { mutableStateOf(false) }
     var showClearCoverCacheDialog by rememberSaveable { mutableStateOf(false) }
     val showBiosDialog = remember { mutableStateOf(false) }
     val showArcadeBiosDialog = remember { mutableStateOf(false) }
     var showEmulatorDataLocationDialog by remember { mutableStateOf(false) }
     val pendingCoverUrl = remember { mutableStateOf("") }
+    val pendingArcadeCoverUrl = remember { mutableStateOf("") }
     var searchEnabled by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     val selectedTabFocusRequester = remember { FocusRequester() }
@@ -557,6 +559,10 @@ fun SettingsScreen(
                 onOpenCoverUrlEditor = {
                     pendingCoverUrl.value = uiState.coverDownloadBaseUrl.orEmpty()
                     showCoverUrlDialog.value = true
+                },
+                onOpenArcadeCoverUrlEditor = {
+                    pendingArcadeCoverUrl.value = uiState.arcadeCoverDownloadBaseUrl.orEmpty()
+                    showArcadeCoverUrlDialog.value = true
                 },
                 onClearCoverCache = { showClearCoverCacheDialog = true },
                 launchSettingsBackupExport = {
@@ -999,32 +1005,7 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        val parts = pendingCoverUrl.value.trim()
-                            .split(Regex("\\s+"))
-                            .filter { it.isNotBlank() }
-                        val value = parts.joinToString(" ")
-                        val hasInvalidPart = parts.any {
-                            !it.startsWith("http://") && !it.startsWith("https://")
-                        }
-                        if (hasInvalidPart || parts.size > 2) {
-                            Toast.makeText(
-                                context,
-                                coverUrlInvalidMessage,
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            return@TextButton
-                        }
-                        viewModel.setCoverDownloadBaseUrl(value.ifBlank { null })
-                        showCoverUrlDialog.value = false
-                    }
-                ) {
-                    Text(stringResource(R.string.save))
-                }
-            },
-            dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(horizontalAlignment = Alignment.End) {
                     TextButton(
                         onClick = {
                             pendingCoverUrl.value = ""
@@ -1034,8 +1015,147 @@ fun SettingsScreen(
                     ) {
                         Text(stringResource(R.string.settings_cover_download_url_use_default))
                     }
-                    TextButton(onClick = { showCoverUrlDialog.value = false }) {
-                        Text(stringResource(android.R.string.cancel))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { showCoverUrlDialog.value = false }) {
+                            Text(stringResource(android.R.string.cancel))
+                        }
+                        TextButton(
+                            onClick = {
+                                val parts = pendingCoverUrl.value.trim()
+                                    .split(Regex("\\s+"))
+                                    .filter { it.isNotBlank() }
+                                val value = parts.joinToString(" ")
+                                val hasInvalidPart = parts.any {
+                                    !it.startsWith("http://") && !it.startsWith("https://")
+                                }
+                                if (hasInvalidPart || parts.size > 2) {
+                                    Toast.makeText(
+                                        context,
+                                        coverUrlInvalidMessage,
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@TextButton
+                                }
+                                viewModel.setCoverDownloadBaseUrl(value.ifBlank { null })
+                                showCoverUrlDialog.value = false
+                            }
+                        ) {
+                            Text(stringResource(R.string.save))
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    if (showArcadeCoverUrlDialog.value) {
+        val arcadeCoverUrlFocusRequester = remember { FocusRequester() }
+        val exampleBundle = remember {
+            "${CoverArtRepository.DEFAULT_ARCADE_COVER_BASE_URL} ${CoverArtRepository.DEFAULT_ARCADE_COVER_3D_BASE_URL}"
+        }
+        LaunchedEffect(showArcadeCoverUrlDialog.value) {
+            if (showArcadeCoverUrlDialog.value) {
+                arcadeCoverUrlFocusRequester.requestFocus()
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { showArcadeCoverUrlDialog.value = false },
+            title = {
+                Text(stringResource(R.string.settings_cover_download_arcade_url_dialog_title))
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_cover_download_arcade_url_dialog_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = pendingArcadeCoverUrl.value,
+                        onValueChange = { pendingArcadeCoverUrl.value = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(arcadeCoverUrlFocusRequester),
+                        minLines = 2,
+                        maxLines = 4,
+                        shape = RoundedCornerShape(18.dp),
+                        label = { Text(stringResource(R.string.settings_cover_download_arcade_url)) },
+                        placeholder = { Text(stringResource(R.string.settings_cover_download_url_placeholder)) }
+                    )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.settings_cover_download_url_example),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            CoverUrlExampleRow(
+                                label = stringResource(R.string.settings_cover_download_url_example_hint),
+                                onClick = {
+                                    pendingArcadeCoverUrl.value = exampleBundle
+                                    scope.launch { arcadeCoverUrlFocusRequester.requestFocus() }
+                                },
+                                onLongClick = {
+                                    val clipboardManager = context.getSystemService(android.content.ClipboardManager::class.java)
+                                    clipboardManager?.setPrimaryClip(
+                                        ClipData.newPlainText("cover_urls", exampleBundle)
+                                    )
+                                    Toast.makeText(
+                                        context,
+                                        coverUrlCopiedMessage,
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(
+                        onClick = {
+                            pendingArcadeCoverUrl.value = ""
+                            viewModel.setArcadeCoverDownloadBaseUrl(null)
+                            showArcadeCoverUrlDialog.value = false
+                        }
+                    ) {
+                        Text(stringResource(R.string.settings_cover_download_url_use_default))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { showArcadeCoverUrlDialog.value = false }) {
+                            Text(stringResource(android.R.string.cancel))
+                        }
+                        TextButton(
+                            onClick = {
+                                val parts = pendingArcadeCoverUrl.value.trim()
+                                    .split(Regex("\\s+"))
+                                    .filter { it.isNotBlank() }
+                                val value = parts.joinToString(" ")
+                                val hasInvalidPart = parts.any {
+                                    !it.startsWith("http://") && !it.startsWith("https://")
+                                }
+                                if (hasInvalidPart || parts.size > 2) {
+                                    Toast.makeText(
+                                        context,
+                                        coverUrlInvalidMessage,
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@TextButton
+                                }
+                                viewModel.setArcadeCoverDownloadBaseUrl(value.ifBlank { null })
+                                showArcadeCoverUrlDialog.value = false
+                            }
+                        ) {
+                            Text(stringResource(R.string.save))
+                        }
                     }
                 }
             }
@@ -1184,6 +1304,7 @@ private fun SettingsContent(
     launchCustomFontPicker: () -> Unit,
     launchShaderPackPicker: () -> Unit,
     onOpenCoverUrlEditor: () -> Unit,
+    onOpenArcadeCoverUrlEditor: () -> Unit,
     onClearCoverCache: () -> Unit,
     launchSettingsBackupExport: () -> Unit,
     launchSettingsBackupImport: () -> Unit,
@@ -2362,6 +2483,13 @@ private fun SettingsContent(
                     } else {
                         builtInCoverSourceLabel
                     }
+                    val arcadeCoverUrlDisplay = if (!uiState.arcadeCoverDownloadBaseUrl.isNullOrBlank()) {
+                        customCoverSourceLabel
+                    } else if (uiState.coverArtStyle == AppPreferences.COVER_ART_STYLE_DISABLED) {
+                        coverDownloadDisabledLabel
+                    } else {
+                        builtInCoverSourceLabel
+                    }
 
                     LaunchedEffect(repository) {
                         val assignments = repository.ensureDefaultCardsAssigned()
@@ -2459,6 +2587,13 @@ private fun SettingsContent(
                             value = coverUrlDisplay,
                             onClick = onOpenCoverUrlEditor,
                             helpText = stringResource(R.string.settings_help_cover_download_url)
+                        )
+                        SettingsItem(
+                            icon = Icons.Rounded.Link,
+                            label = stringResource(R.string.settings_cover_download_arcade_url),
+                            value = arcadeCoverUrlDisplay,
+                            onClick = onOpenArcadeCoverUrlEditor,
+                            helpText = stringResource(R.string.settings_cover_download_arcade_url_dialog_body)
                         )
                         SettingsItem(
                             icon = Icons.Rounded.DeleteOutline,
@@ -5322,6 +5457,7 @@ private fun rememberSettingsSearchEntries(): List<SettingsSearchEntry> {
         entry(SettingsTab.Library, R.string.settings_memory_cards_tab),
         entry(SettingsTab.Library, R.string.settings_cover_art_style),
         entry(SettingsTab.Library, R.string.settings_cover_download_url),
+        entry(SettingsTab.Library, R.string.settings_cover_download_arcade_url),
         entry(SettingsTab.Library, R.string.settings_clear_cover_cache),
         entry(SettingsTab.Library, R.string.settings_backup_export_title),
         entry(SettingsTab.Library, R.string.settings_backup_restore_title),

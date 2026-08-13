@@ -123,7 +123,7 @@ class GameRepository {
         }
 
         return game.serial?.let { serial ->
-            CoverArtRepository(context).downloadCover(serial)
+            CoverArtRepository(context).downloadCover(serial, isArcade = game.fileName.endsWith(".acgame", ignoreCase = true))
         }
     }
 
@@ -174,7 +174,7 @@ class GameRepository {
                         fileSize = file.length(),
                         lastModified = file.lastModified(),
                         coverArtPath = customCoverRepository.findCustomCoverPath(file.absolutePath)
-                            ?: coverRepository.findCachedCoverPath(serial)
+                            ?: coverRepository.findCachedCoverPath(serial, isArcade = file.name.endsWith(".acgame", ignoreCase = true))
                             ?: cachedGame?.coverArtPath?.takeIf { File(it).exists() }
                             ?: coverCandidates[normalizeBaseName(file.nameWithoutExtension)]?.absolutePath
                             ?: coverCandidates[normalizeBaseName(cleanGameName(title))]?.absolutePath,
@@ -258,7 +258,7 @@ class GameRepository {
                         fileSize = fileSize,
                         lastModified = lastModified,
                         coverArtPath = customCoverRepository.findCustomCoverPath(uriPath)
-                            ?: coverRepository.findCachedCoverUri(serial)
+                            ?: coverRepository.findCachedCoverUri(serial, isArcade = name.endsWith(".acgame", ignoreCase = true))
                             ?: cachedGame?.coverArtPath
                             ?: coverCandidates[normalizeBaseName(name.substringBeforeLast('.'))]?.uri?.toString()
                             ?: coverCandidates[normalizeBaseName(cleanGameName(title))]?.uri?.toString(),
@@ -280,14 +280,14 @@ class GameRepository {
         val titleKey = normalizeBaseName(cleanGameName(title ?: EmulatorBridge.getGameTitle(path)))
         val coverCandidates = buildLocalCoverCandidates(parent.listFiles().orEmpty())
         return CustomGameCoverRepository(context).findCustomCoverPath(path)
-            ?: CoverArtRepository(context).findCachedCoverPath(serial)
+            ?: CoverArtRepository(context).findCachedCoverPath(serial, isArcade = path.endsWith(".acgame", ignoreCase = true))
             ?: coverCandidates[baseName]?.absolutePath
             ?: coverCandidates[titleKey]?.absolutePath
     }
 
     private fun findDocumentCover(path: String, context: Context, serial: String?, title: String?): String? {
         CustomGameCoverRepository(context).findCustomCoverPath(path)?.let { return it }
-        CoverArtRepository(context).findCachedCoverUri(serial)?.let { return it }
+        CoverArtRepository(context).findCachedCoverUri(serial, isArcade = path.endsWith(".acgame", ignoreCase = true))?.let { return it }
 
         val uri = path.toUri()
         val document = DocumentFile.fromSingleUri(context, uri) ?: return null

@@ -23,6 +23,8 @@ class CoverArtRepository(context: Context) {
         private const val TAG = "CoverArtRepository"
         const val DEFAULT_COVER_BASE_URL = "https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/default"
         const val DEFAULT_COVER_3D_BASE_URL = "https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/3d"
+        const val DEFAULT_ARCADE_COVER_BASE_URL = "https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/arcade"
+        const val DEFAULT_ARCADE_COVER_3D_BASE_URL = "https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/arcade"
         private const val CONNECT_TIMEOUT_MS = 10000
         private const val READ_TIMEOUT_MS = 15000
         private const val MISS_TTL_MS = 7L * 24L * 60L * 60L * 1000L // 7 days
@@ -56,7 +58,8 @@ class CoverArtRepository(context: Context) {
     fun findCachedCoverPath(
         serial: String?,
         styleOverride: Int? = null,
-        ignoreDisabled: Boolean = false
+        ignoreDisabled: Boolean = false,
+        isArcade: Boolean = false
     ): String? {
         val style = resolveCoverArtStyle(styleOverride)
         if (!ignoreDisabled && style == AppPreferences.COVER_ART_STYLE_DISABLED) {
@@ -92,15 +95,17 @@ class CoverArtRepository(context: Context) {
     fun findCachedCoverUri(
         serial: String?,
         styleOverride: Int? = null,
-        ignoreDisabled: Boolean = false
+        ignoreDisabled: Boolean = false,
+        isArcade: Boolean = false
     ): String? {
-        return findCachedCoverPath(serial, styleOverride, ignoreDisabled)
+        return findCachedCoverPath(serial, styleOverride, ignoreDisabled, isArcade)
     }
 
     fun downloadCover(
         serial: String?,
         styleOverride: Int? = null,
-        ignoreDisabled: Boolean = false
+        ignoreDisabled: Boolean = false,
+        isArcade: Boolean = false
     ): String? {
         val style = resolveCoverArtStyle(styleOverride)
         if (!ignoreDisabled && style == AppPreferences.COVER_ART_STYLE_DISABLED) {
@@ -112,7 +117,7 @@ class CoverArtRepository(context: Context) {
             Log.w(TAG, "Cannot download cover: invalid serial '$serial'")
             return null
         }
-        val coverBaseUrl = resolveCoverBaseUrl(style)
+        val coverBaseUrl = resolveCoverBaseUrl(style, isArcade)
         val targetExtension = if (style == AppPreferences.COVER_ART_STYLE_3D) "png" else "jpg"
 
         Log.d(TAG, "========== COVER DOWNLOAD START ==========")
@@ -177,14 +182,15 @@ class CoverArtRepository(context: Context) {
 
     fun buildPublicCoverUrl(
         serial: String?,
-        styleOverride: Int? = AppPreferences.COVER_ART_STYLE_DEFAULT
+        styleOverride: Int? = AppPreferences.COVER_ART_STYLE_DEFAULT,
+        isArcade: Boolean = false
     ): String? {
         val normalizedSerial = normalizeSerial(serial) ?: return null
         val style = resolveCoverArtStyle(styleOverride)
         val baseUrl = if (style == AppPreferences.COVER_ART_STYLE_3D) {
-            DEFAULT_COVER_3D_BASE_URL
+            if (isArcade) DEFAULT_ARCADE_COVER_3D_BASE_URL else DEFAULT_COVER_3D_BASE_URL
         } else {
-            DEFAULT_COVER_BASE_URL
+            if (isArcade) DEFAULT_ARCADE_COVER_BASE_URL else DEFAULT_COVER_BASE_URL
         }
         val extension = if (style == AppPreferences.COVER_ART_STYLE_3D) "png" else "jpg"
         return "$baseUrl/$normalizedSerial.$extension"
@@ -295,9 +301,13 @@ class CoverArtRepository(context: Context) {
             .also { Log.d(TAG, "Normalized: '$serial' -> '$it'") }
     }
 
-    private fun resolveCoverBaseUrl(style: Int = resolveCoverArtStyle()): String {
+    private fun resolveCoverBaseUrl(style: Int = resolveCoverArtStyle(), isArcade: Boolean = false): String {
         val preferences = AppPreferences(context)
-        val configuredUrls = preferences.getCoverDownloadBaseUrlSync()
+        val configuredUrls = if (isArcade) {
+            preferences.getArcadeCoverDownloadBaseUrlSync()
+        } else {
+            preferences.getCoverDownloadBaseUrlSync()
+        }
             ?.split(Regex("\\s+"))
             ?.map { it.trim().trimEnd('/') }
             ?.filter { it.isNotBlank() }
@@ -310,9 +320,9 @@ class CoverArtRepository(context: Context) {
             }
         }
         return if (style == AppPreferences.COVER_ART_STYLE_3D) {
-            DEFAULT_COVER_3D_BASE_URL
+            if (isArcade) DEFAULT_ARCADE_COVER_3D_BASE_URL else DEFAULT_COVER_3D_BASE_URL
         } else {
-            DEFAULT_COVER_BASE_URL
+            if (isArcade) DEFAULT_ARCADE_COVER_BASE_URL else DEFAULT_COVER_BASE_URL
         }
     }
 

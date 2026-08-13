@@ -604,6 +604,9 @@
     <string name="settings_cover_download_url_use_default">Use default</string>
     <string name="settings_cover_download_url_invalid">Enter a valid HTTP or HTTPS URL.</string>
     <string name="settings_cover_download_url_copied">Example URLs copied.</string>
+    <string name="settings_cover_download_arcade_url">Arcade Cover Download URL</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">Custom arcade cover source</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">Paste one or two direct base URLs for Arcade games. If you use two, put the 2D URL first and the 3D URL second, separated by a space. Leave it empty to use the built-in source again.</string>
     <string name="settings_not_set">Not set</string>
     <string name="settings_auto">Auto</string>
     <string name="settings_about">About</string>

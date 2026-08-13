@@ -2444,4 +2444,7 @@
     <string name="onboarding_arcade_bios_invalid">BIOS آرکید COH-H معتبر نیست</string>
     <string name="emulation_arcade_bios_missing">این بازی Namco System 246/256 به BIOS آرکید COH-H معتبر نیاز دارد. آن را در تنظیمات › کتابخانه › Namco System 246/256 اضافه کنید.</string>
     <string name="settings_arcade_controls_note">کنترل‌های آرکید: L3 سکه وارد می‌کند و R3 حالت آزمایش را تغییر می‌دهد. سایر کنترل‌ها از چیدمان JVS انتخاب‌شده توسط مانیفست پیروی می‌کنند.</string>
+    <string name="settings_cover_download_arcade_url">آدرس دانلود کاور آرکید</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">منبع سفارشی کاور آرکید</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">یک یا دو آدرس پایه مستقیم برای بازی‌های آرکید جای‌گذاری کنید. اگر از دو آدرس استفاده می‌کنید، ابتدا آدرس دوبعدی و سپس آدرس سه‌بعدی را قرار دهید و با یک فاصله از هم جدا کنید. برای استفاده مجدد از منبع داخلی، آن را خالی بگذارید.</string>
 </resources>

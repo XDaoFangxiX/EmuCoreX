@@ -123,6 +123,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var coverCacheRevisionInitialized = false
     private var currentCoverArtStyle = AppPreferences.COVER_ART_STYLE_DEFAULT
     private var currentCoverDownloadBaseUrl: String? = null
+    private var currentArcadeCoverDownloadBaseUrl: String? = null
+    private var arcadeCoverBaseUrlInitialized = false
     private val scanMutex = Mutex()
     private var deferredLibraryScan: DeferredLibraryScan? = null
     private var deferredWorkJob: Job? = null
@@ -318,6 +320,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val shouldRefreshLibrary = coverBaseUrlInitialized && currentCoverDownloadBaseUrl != baseUrl
                 currentCoverDownloadBaseUrl = baseUrl
                 coverBaseUrlInitialized = true
+                if (shouldRefreshLibrary) {
+                    handleCoverSourceChanged()
+                }
+            }
+        }
+        viewModelScope.launch {
+            preferences.arcadeCoverDownloadBaseUrl.distinctUntilChanged().collect { baseUrl ->
+                val shouldRefreshLibrary = arcadeCoverBaseUrlInitialized && currentArcadeCoverDownloadBaseUrl != baseUrl
+                currentArcadeCoverDownloadBaseUrl = baseUrl
+                arcadeCoverBaseUrlInitialized = true
                 if (shouldRefreshLibrary) {
                     handleCoverSourceChanged()
                 }

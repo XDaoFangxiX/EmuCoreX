@@ -2451,4 +2451,7 @@
     <string name="onboarding_arcade_bios_invalid">Nieprawidłowy BIOS arcade COH-H</string>
     <string name="emulation_arcade_bios_missing">Ta gra Namco System 246/256 wymaga prawidłowego BIOS-u arcade COH-H. Dodaj go w Ustawienia › Biblioteka › Namco System 246/256.</string>
     <string name="settings_arcade_controls_note">Sterowanie arcade: L3 wrzuca monetę, a R3 przełącza tryb testowy. Pozostałe przyciski odpowiadają układowi JVS wybranemu przez manifest.</string>
+    <string name="settings_cover_download_arcade_url">Adres URL pobierania okładek Arcade</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">Niestandardowe źródło okładek Arcade</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">Wklej jeden lub dwa bezpośrednie podstawowe adresy URL gier Arcade. Jeśli używasz dwóch, wpisz najpierw adres URL 2D, a następnie adres URL 3D, oddzielając je spacją. Pozostaw puste, aby ponownie użyć wbudowanego źródła.</string>
 </resources>

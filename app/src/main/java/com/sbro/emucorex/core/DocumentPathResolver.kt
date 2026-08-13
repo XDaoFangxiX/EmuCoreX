@@ -98,6 +98,49 @@ object DocumentPathResolver {
         return prepareBiosSelection(context, rawPath)?.directoryPath
     }
 
+    fun prepareArcadeBiosSelection(context: Context, rawPath: String?): PreparedBiosSelection? {
+        if (rawPath.isNullOrBlank()) return null
+        if (!rawPath.startsWith("content://")) {
+            val file = File(rawPath)
+            return when {
+                file.isFile && ArcadeBiosValidator.isValidLocalArcadeBios(file) -> PreparedBiosSelection(
+                    directoryPath = file.parentFile?.absolutePath ?: file.absoluteFile.parent.orEmpty(),
+                    fileName = file.name
+                )
+                file.isDirectory -> PreparedBiosSelection(
+                    directoryPath = file.absolutePath,
+                    fileName = findPreferredArcadeBiosFileName(file.absolutePath)
+                ).takeIf { it.fileName != null }
+                else -> null
+            }
+        }
+
+        val uri = rawPath.toUri()
+        if (DocumentsContract.isTreeUri(uri)) return null
+        val targetDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "imported-arcade-bios")
+        preparedArcadeBiosForSource(targetDir, rawPath)?.let { return it }
+        if (!targetDir.exists() && !targetDir.mkdirs()) return null
+        val stagingDir = File(targetDir.parentFile ?: context.filesDir, "imported-arcade-bios-staging")
+
+        val imported = runCatching {
+            prepareFlatStagingDirectory(stagingDir)
+            val single = DocumentFile.fromSingleUri(context, uri) ?: return@runCatching null
+            val displayName = runCatching { single.name }.getOrNull().orEmpty().ifBlank {
+                getDisplayName(context, rawPath)
+            }
+            val copiedPath = copySingleArcadeBiosFile(context, single, displayName, stagingDir)
+                ?: return@runCatching null
+            val preferred = File(copiedPath).name
+            writeBiosSourceMarker(stagingDir, rawPath)
+            if (!replaceImportedBiosDirectory(targetDir, stagingDir)) return@runCatching null
+            PreparedBiosSelection(targetDir.absolutePath, preferred)
+        }.onFailure { error ->
+            Log.w(TAG, "Unable to prepare Namco arcade BIOS selection: $uri", error)
+        }.getOrNull()
+
+        return imported ?: preparedArcadeBiosForSource(targetDir, rawPath)
+    }
+
     fun prepareBiosSelection(context: Context, rawPath: String?): PreparedBiosSelection? {
         if (rawPath.isNullOrBlank()) return null
         if (!rawPath.startsWith("content://")) {
@@ -159,6 +202,12 @@ object DocumentPathResolver {
         return preparedBiosForSource(targetDir, rawPath) != null
     }
 
+    fun hasPreparedArcadeBiosForSource(context: Context, rawPath: String?): Boolean {
+        if (rawPath.isNullOrBlank()) return false
+        val targetDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "imported-arcade-bios")
+        return preparedArcadeBiosForSource(targetDir, rawPath) != null
+    }
+
     fun findPreferredBiosFileName(directoryPath: String?): String? {
         if (directoryPath.isNullOrBlank()) return null
         val dir = File(directoryPath)
@@ -169,6 +218,26 @@ object DocumentPathResolver {
             .filter(::isValidPreparedBiosFile).minByOrNull { it.name.lowercase() }
             ?.name
     }
+
+    fun findPreferredArcadeBiosFileName(directoryPath: String?): String? {
+        if (directoryPath.isNullOrBlank()) return null
+        val dir = File(directoryPath)
+        if (!dir.isDirectory) return null
+        return dir.walkTopDown()
+            .maxDepth(2)
+            .filter(ArcadeBiosValidator::isValidLocalArcadeBios)
+            .minByOrNull { it.name.lowercase() }
+            ?.name
+    }
+
+    fun isArcadeManifestPath(context: Context, rawPath: String?): Boolean {
+        if (rawPath.isNullOrBlank()) return false
+        val name = if (rawPath.startsWith("content://")) getDisplayName(context, rawPath) else rawPath
+        return isArcadeManifestName(name)
+    }
+
+    internal fun isArcadeManifestName(name: String?): Boolean =
+        name.orEmpty().substringAfterLast('.', "").equals("acgame", ignoreCase = true)
 
     fun getDisplayName(context: Context, rawPath: String): String {
         if (!rawPath.startsWith("content://")) return normalizeDisplayName(rawPath)
@@ -404,6 +473,21 @@ object DocumentPathResolver {
         return copiedPath
     }
 
+    private fun copySingleArcadeBiosFile(
+        context: Context,
+        file: DocumentFile,
+        displayName: String,
+        targetDir: File
+    ): String? {
+        val targetFile = File(targetDir, sanitizeFileName(displayName.ifBlank { "namco-arcade-bios.bin" }))
+        val copiedPath = copyUriToFile(context, file.uri, targetFile) ?: return null
+        if (!ArcadeBiosValidator.isValidLocalArcadeBios(targetFile)) {
+            targetFile.delete()
+            return null
+        }
+        return copiedPath
+    }
+
     private fun copyUriToFile(context: Context, uri: Uri, targetFile: File): String? {
         return runCatching {
             targetFile.parentFile?.mkdirs()
@@ -447,8 +531,9 @@ object DocumentPathResolver {
         if (!file.isFile || file.extension.lowercase() !in biosImageExtensions) return false
         if (file.length() <= 0L || file.length() > MAX_IMPORTED_BIOS_BYTES) return false
         return if (NativeApp.hasNativeCore) {
-            runCatching { NativeApp.isBiosPath(file.absolutePath) }.getOrDefault(false) ||
-                isLikelyMainBiosName(file.name)
+            runCatching {
+                NativeApp.getBiosTypePath(file.absolutePath) == BiosValidator.BIOS_TYPE_RETAIL_PS2
+            }.getOrDefault(isLikelyMainBiosName(file.name))
         } else {
             isLikelyMainBiosName(file.name)
         }
@@ -476,9 +561,18 @@ object DocumentPathResolver {
         return PreparedBiosSelection(targetDir.absolutePath, preferred)
     }
 
+    private fun preparedArcadeBiosForSource(targetDir: File, rawPath: String): PreparedBiosSelection? {
+        val markerMatches = runCatching {
+            File(targetDir, BIOS_SOURCE_MARKER).readText() == rawPath
+        }.getOrDefault(false)
+        if (!markerMatches) return null
+        val preferred = findPreferredArcadeBiosFileName(targetDir.absolutePath) ?: return null
+        return PreparedBiosSelection(targetDir.absolutePath, preferred)
+    }
+
     internal fun replaceImportedBiosDirectory(targetDir: File, stagingDir: File): Boolean {
         val parent = targetDir.parentFile ?: return false
-        val backupDir = File(parent, "imported-bios-backup")
+        val backupDir = File(parent, "${targetDir.name}-backup")
         prepareFlatStagingDirectory(backupDir)
         backupDir.delete()
 

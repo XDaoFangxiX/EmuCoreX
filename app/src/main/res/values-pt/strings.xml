@@ -2418,4 +2418,17 @@
     <string name="network_guide_internet_requirements">Ambos os jogadores precisam da mesma versão do jogo e de uma conexão estável. Um relay TURN pode ser necessário se a conexão direta estiver bloqueada.</string>
     <string name="network_guide_internet_steps">1. O anfitrião cria uma sala e compartilha o código de 8 caracteres.\n2. O convidado insere o código e aguarda Conectado.\n3. Ambos os jogadores iniciam o mesmo jogo.\n4. Abra o modo LAN do jogo.\n5. O host cria uma correspondência; o convidado procura e se junta a ele.</string>
     <string name="network_guide_internet_limits">O jogo deve suportar jogo em LAN ou link de sistema. A latência da Internet é adicionada ao protocolo de rede do próprio jogo. Redes corporativas, de nível de operadora ou altamente restritas podem exigir um relé TURN.</string>
+    <string name="settings_arcade_section_title">Namco System 246/256</string>
+    <string name="settings_arcade_bios_path">BIOS de arcade (COH-H)</string>
+    <string name="settings_help_arcade_bios_path">Selecione um dump legal do BIOS de arcade COH-H. Um BIOS comum de PS2 não executa jogos do Namco System 246/256.</string>
+    <string name="settings_arcade_setup_note">Apenas para jogos de arcade da Namco. Adicione à biblioteca a pasta com cada manifesto .acgame e os arquivos ELF, mídia, dongle e cartões referenciados. O EmuCoreX alterna automaticamente para este BIOS ao iniciar um .acgame.</string>
+    <string name="settings_arcade_bios_picker_title">Escolher BIOS de arcade da Namco</string>
+    <string name="settings_arcade_bios_picker_desc">Escolha um dump de BIOS COH-H de 2 MiB obtido do seu próprio hardware, como r27v1602f.7d para System 246 ou r27v1602f.8g para System 256.</string>
+    <string name="settings_arcade_bios_remove">Remover</string>
+    <string name="onboarding_arcade_bios_title">BIOS do Namco System 246/256</string>
+    <string name="onboarding_arcade_bios_desc">Opcional. Adicione um BIOS de arcade COH-H somente se quiser iniciar títulos .acgame do Namco System 246/256.</string>
+    <string name="onboarding_status_optional">Opcional</string>
+    <string name="onboarding_arcade_bios_invalid">BIOS de arcade COH-H inválido</string>
+    <string name="emulation_arcade_bios_missing">Este jogo do Namco System 246/256 precisa de um BIOS de arcade COH-H válido. Adicione-o em Configurações › Biblioteca › Namco System 246/256.</string>
+    <string name="settings_arcade_controls_note">Controles de arcade: L3 insere uma moeda e R3 alterna o modo de teste. Os demais controles seguem o layout JVS escolhido pelo manifesto.</string>
 </resources>

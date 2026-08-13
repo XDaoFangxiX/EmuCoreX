@@ -10,6 +10,10 @@ import java.io.File
 
 object BiosValidator {
 
+    const val BIOS_TYPE_INVALID = 0
+    const val BIOS_TYPE_RETAIL_PS2 = 1
+    const val BIOS_TYPE_NAMCO_ARCADE = 2
+
     private val biosImageExtensions = setOf("bin", "rom")
     private val biosLibraryExtensions = biosImageExtensions + setOf("mec", "nvm", "elf")
     private val fileNameHints = listOf("scph", "ps2", "bios", "rom")
@@ -111,7 +115,9 @@ object BiosValidator {
         if (!file.isFile || !isBiosCandidate(file.name, file.length())) return false
         val knownValidShape = isUsableMainBiosImage(file.name, file.length()) && file.canRead()
         if (!NativeApp.hasNativeCore) return knownValidShape
-        return runCatching { NativeApp.isBiosPath(file.absolutePath) }.getOrDefault(false) || knownValidShape
+        return runCatching {
+            NativeApp.getBiosTypePath(file.absolutePath) == BIOS_TYPE_RETAIL_PS2
+        }.getOrDefault(knownValidShape)
     }
 
     private fun isValidContentBios(context: Context, uri: Uri, displayName: String, fileSize: Long): Boolean {
@@ -124,7 +130,7 @@ object BiosValidator {
         var detachedFd = -1
         return try {
             detachedFd = descriptor.detachFd()
-            NativeApp.isBiosFd(detachedFd) || knownValidShape
+            NativeApp.getBiosTypeFd(detachedFd) == BIOS_TYPE_RETAIL_PS2
         } catch (_: RuntimeException) {
             if (detachedFd >= 0) {
                 runCatching { ParcelFileDescriptor.adoptFd(detachedFd).close() }
@@ -196,6 +202,63 @@ object BiosValidator {
             if (checkedDirectories >= MAX_BIOS_PROBE_DIRECTORIES) return false
             checkedDirectories++
             return true
+        }
+    }
+}
+
+object ArcadeBiosValidator {
+    private const val ARCADE_BIOS_BYTES = 2L * 1024L * 1024L
+    private val knownArcadeBiosNames = setOf("r27v1602f.7d", "r27v1602f.8g")
+
+    fun hasUsableArcadeBios(context: Context, rawPath: String?): Boolean {
+        if (rawPath.isNullOrBlank()) return false
+        return if (rawPath.startsWith("content://")) {
+            isValidContentArcadeBios(context, rawPath.toUri()) ||
+                DocumentPathResolver.hasPreparedArcadeBiosForSource(context, rawPath)
+        } else {
+            val file = File(rawPath)
+            when {
+                file.isFile -> isValidLocalArcadeBios(file)
+                file.isDirectory -> file.walkTopDown().maxDepth(2).any(::isValidLocalArcadeBios)
+                else -> false
+            }
+        }
+    }
+
+    internal fun isKnownArcadeBiosShape(name: String?, size: Long): Boolean {
+        return name.orEmpty().lowercase() in knownArcadeBiosNames &&
+            (size <= 0L || size == ARCADE_BIOS_BYTES)
+    }
+
+    internal fun isValidLocalArcadeBios(file: File): Boolean {
+        if (!file.isFile || file.length() <= 0L || file.length() > 8L * 1024L * 1024L) return false
+        val knownShape = isKnownArcadeBiosShape(file.name, file.length()) && file.canRead()
+        if (!NativeApp.hasNativeCore) return knownShape
+        return runCatching {
+            NativeApp.getBiosTypePath(file.absolutePath) == BiosValidator.BIOS_TYPE_NAMCO_ARCADE
+        }.getOrDefault(knownShape)
+    }
+
+    private fun isValidContentArcadeBios(context: Context, uri: Uri): Boolean {
+        val document = runCatching { DocumentFile.fromSingleUri(context, uri) }.getOrNull() ?: return false
+        val displayName = runCatching { document.name }.getOrNull().orEmpty().ifBlank {
+            DocumentPathResolver.getDisplayName(context, uri.toString())
+        }
+        val size = runCatching { document.length() }.getOrDefault(0L)
+        val knownShape = isKnownArcadeBiosShape(displayName, size)
+        if (!NativeApp.hasNativeCore) return knownShape
+
+        val descriptor = runCatching { context.contentResolver.openFileDescriptor(uri, "r") }.getOrNull()
+            ?: return knownShape
+        var detachedFd = -1
+        return try {
+            detachedFd = descriptor.detachFd()
+            NativeApp.getBiosTypeFd(detachedFd) == BiosValidator.BIOS_TYPE_NAMCO_ARCADE
+        } catch (_: RuntimeException) {
+            if (detachedFd >= 0) runCatching { ParcelFileDescriptor.adoptFd(detachedFd).close() }
+            knownShape
+        } finally {
+            runCatching { descriptor.close() }
         }
     }
 }

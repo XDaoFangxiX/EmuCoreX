@@ -2431,4 +2431,7 @@
     <string name="onboarding_arcade_bios_invalid">Kein gültiges COH-H-Arcade-BIOS</string>
     <string name="emulation_arcade_bios_missing">Dieses Namco-System-246/256-Spiel benötigt ein gültiges COH-H-Arcade-BIOS. Füge es unter Einstellungen › Bibliothek › Namco System 246/256 hinzu.</string>
     <string name="settings_arcade_controls_note">Arcade-Steuerung: L3 wirft eine Münze ein, R3 schaltet den Testmodus um. Die übrigen Tasten folgen dem vom Manifest gewählten JVS-Layout.</string>
+    <string name="settings_cover_download_arcade_url">Arcade-Cover Download-URL</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">Benutzerdefinierte Arcade-Cover-Quelle</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">Fügen Sie ein oder zwei direkte Basis-URLs für Arcade-Spiele ein. Wenn Sie zwei verwenden, setzen Sie die 2D-URL zuerst und die 3D-URL als zweites, getrennt durch ein Leerzeichen. Lassen Sie es leer, um wieder die integrierte Quelle zu verwenden.</string>
 </resources>

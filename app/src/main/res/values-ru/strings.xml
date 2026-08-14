@@ -2433,4 +2433,7 @@
     <string name="onboarding_arcade_bios_invalid">Это не действительный аркадный BIOS COH-H</string>
     <string name="emulation_arcade_bios_missing">Для этой игры Namco System 246/256 нужен действительный аркадный BIOS COH-H. Добавьте его в Настройки › Библиотека › Namco System 246/256.</string>
     <string name="settings_arcade_controls_note">Управление аркадой: L3 добавляет монету, R3 переключает тестовый режим. Остальные кнопки соответствуют схеме JVS, выбранной манифестом.</string>
+    <string name="settings_cover_download_arcade_url">URL загрузки обложек Arcade</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">Пользовательский источник обложек Arcade</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">Вставьте один или два прямых базовых URL-адреса для аркадных игр. Если вы используете два, сначала укажите 2D URL, а затем 3D URL, разделив их пробелом. Оставьте пустым, чтобы снова использовать встроенный источник.</string>
 </resources>

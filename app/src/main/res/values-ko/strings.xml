@@ -2428,4 +2428,7 @@
     <string name="onboarding_arcade_bios_invalid">유효한 COH-H 아케이드 BIOS가 아닙니다</string>
     <string name="emulation_arcade_bios_missing">이 Namco System 246/256 게임에는 유효한 COH-H 아케이드 BIOS가 필요합니다. 설정 › 라이브러리 › Namco System 246/256에서 추가하세요.</string>
     <string name="settings_arcade_controls_note">아케이드 조작: L3는 코인을 넣고 R3는 테스트 모드를 전환합니다. 나머지 조작은 매니페스트가 선택한 JVS 레이아웃을 따릅니다.</string>
+    <string name="settings_cover_download_arcade_url">아케이드 커버 다운로드 URL</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">맞춤형 아케이드 커버 소스</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">아케이드 게임을 위한 하나 또는 두 개의 직접 기본 URL을 붙여넣으세요. 두 개를 사용하는 경우 2D URL을 먼저, 3D URL을 두 번째로 입력하고 공백으로 구분합니다. 내장 소스를 다시 사용하려면 비워 두세요.</string>
 </resources>

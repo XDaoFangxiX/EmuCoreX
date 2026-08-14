@@ -2429,4 +2429,7 @@
     <string name="onboarding_arcade_bios_invalid">यह मान्य COH-H आर्केड BIOS नहीं है</string>
     <string name="emulation_arcade_bios_missing">इस Namco System 246/256 गेम को मान्य COH-H आर्केड BIOS चाहिए। इसे सेटिंग्स › लाइब्रेरी › Namco System 246/256 में जोड़ें।</string>
     <string name="settings_arcade_controls_note">आर्केड नियंत्रण: L3 सिक्का डालता है और R3 परीक्षण मोड बदलता है। अन्य नियंत्रण मैनिफेस्ट द्वारा चुने गए JVS लेआउट का पालन करते हैं।</string>
+    <string name="settings_cover_download_arcade_url">आर्केड कवर डाउनलोड URL</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">कस्टम आर्केड कवर स्रोत</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">आर्केड गेम्स के लिए एक या दो सीधे बेस URL पेस्ट करें। यदि आप दो का उपयोग करते हैं, तो 2D URL को पहले और 3D URL को दूसरे स्थान पर रखें, उनके बीच एक स्पेस दें। अंतर्निहित स्रोत का फिर से उपयोग करने के लिए इसे खाली छोड़ दें।</string>
 </resources>

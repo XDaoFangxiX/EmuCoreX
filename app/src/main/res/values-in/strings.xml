@@ -2443,4 +2443,7 @@
     <string name="onboarding_arcade_bios_invalid">Bukan BIOS arcade COH-H yang valid</string>
     <string name="emulation_arcade_bios_missing">Game Namco System 246/256 ini memerlukan BIOS arcade COH-H yang valid. Tambahkan di Setelan › Pustaka › Namco System 246/256.</string>
     <string name="settings_arcade_controls_note">Kontrol arcade: L3 memasukkan koin; R3 mengaktifkan atau menonaktifkan mode uji. Kontrol lain mengikuti tata letak JVS yang dipilih manifes.</string>
+    <string name="settings_cover_download_arcade_url">URL Unduhan Sampul Arkade</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">Sumber sampul arkade kustom</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">Tempel satu atau dua URL dasar langsung untuk game Arkade. Jika Anda menggunakan dua, letakkan URL 2D pertama dan URL 3D kedua, dipisahkan oleh spasi. Kosongkan untuk menggunakan sumber bawaan lagi.</string>
 </resources>

@@ -2433,4 +2433,7 @@
     <string name="onboarding_arcade_bios_invalid">ليس BIOS أركيد COH-H صالحًا</string>
     <string name="emulation_arcade_bios_missing">تحتاج لعبة Namco System 246/256 هذه إلى BIOS أركيد COH-H صالح. أضفه من الإعدادات › المكتبة › Namco System 246/256.</string>
     <string name="settings_arcade_controls_note">عناصر تحكم الأركيد: يضيف L3 عملة، ويبدّل R3 وضع الاختبار. تتبع بقية العناصر تخطيط JVS الذي يحدده ملف اللعبة.</string>
+    <string name="settings_cover_download_arcade_url">عنوان URL لتنزيل غلاف ألعاب الآركيد</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">مصدر مخصص لغلاف ألعاب الآركيد</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">الصق عنوان أو عنواني URL أساسيين مباشرين لألعاب الآركيد. إذا استخدمت اثنين، فضع عنوان URL ثنائي الأبعاد أولاً ثم عنوان URL ثلاثي الأبعاد ثانياً، مفصولين بمسافة. اتركه فارغاً لاستخدام المصدر المدمج مرة أخرى.</string>
 </resources>

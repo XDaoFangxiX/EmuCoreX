@@ -2431,4 +2431,7 @@
     <string name="onboarding_arcade_bios_invalid">BIOS arcade COH-H non valide</string>
     <string name="emulation_arcade_bios_missing">Ce jeu Namco System 246/256 nécessite un BIOS arcade COH-H valide. Ajoutez-le dans Paramètres › Bibliothèque › Namco System 246/256.</string>
     <string name="settings_arcade_controls_note">Commandes arcade : L3 insère une pièce et R3 active ou désactive le mode test. Les autres commandes suivent la disposition JVS choisie par le manifeste.</string>
+    <string name="settings_cover_download_arcade_url">URL de téléchargement de jaquettes Arcade</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">Source personnalisée de jaquettes Arcade</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">Collez une ou deux URL de base directes pour les jeux Arcade. Si vous en utilisez deux, placez l\'URL 2D en premier et l\'URL 3D en second, séparées par un espace. Laissez vide pour utiliser à nouveau la source intégrée.</string>
 </resources>

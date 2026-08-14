@@ -2428,4 +2428,7 @@
     <string name="onboarding_arcade_bios_invalid">有効なCOH-HアーケードBIOSではありません</string>
     <string name="emulation_arcade_bios_missing">このNamco System 246/256ゲームには有効なCOH-HアーケードBIOSが必要です。設定 › ライブラリ › Namco System 246/256で追加してください。</string>
     <string name="settings_arcade_controls_note">アーケード操作：L3でコインを投入し、R3でテストモードを切り替えます。その他の操作はマニフェストが選択したJVSレイアウトに従います。</string>
+    <string name="settings_cover_download_arcade_url">アーケードカバーのダウンロードURL</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">カスタムアーケードカバーソース</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">アーケードゲーム用の1つまたは2つの直接ベースURLを貼り付けます。2つ使用する場合は、2D URLを最初に、3D URLを2番目に配置し、スペースで区切ります。組み込みソースを再度使用する場合は空のままにしてください。</string>
 </resources>

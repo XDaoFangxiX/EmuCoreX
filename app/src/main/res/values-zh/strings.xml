@@ -2430,4 +2430,7 @@
     <string name="onboarding_arcade_bios_invalid">不是有效的 COH-H 街机 BIOS</string>
     <string name="emulation_arcade_bios_missing">此 Namco System 246/256 游戏需要有效的 COH-H 街机 BIOS。请在设置 › 游戏库 › Namco System 246/256 中添加。</string>
     <string name="settings_arcade_controls_note">街机控制：L3 投币，R3 切换测试模式。其他控制按照清单选择的 JVS 布局工作。</string>
+    <string name="settings_cover_download_arcade_url">街机封面下载 URL</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">自定义街机封面来源</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">粘贴一个或两个街机游戏的直接基础 URL。如果使用两个，请将 2D URL 放在前面，3D URL 放在后面，并用空格分隔。留空以再次使用内置来源。</string>
 </resources>

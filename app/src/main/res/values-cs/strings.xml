@@ -2449,4 +2449,7 @@
     <string name="onboarding_arcade_bios_invalid">Neplatný arcade BIOS COH-H</string>
     <string name="emulation_arcade_bios_missing">Tato hra Namco System 246/256 vyžaduje platný arcade BIOS COH-H. Přidejte jej v Nastavení › Knihovna › Namco System 246/256.</string>
     <string name="settings_arcade_controls_note">Ovládání arcade: L3 vloží minci a R3 přepne testovací režim. Ostatní tlačítka odpovídají rozložení JVS zvolenému manifestem.</string>
+    <string name="settings_cover_download_arcade_url">URL adresa pro stažení obalu Arcade</string>
+    <string name="settings_cover_download_arcade_url_dialog_title">Vlastní zdroj obalu Arcade</string>
+    <string name="settings_cover_download_arcade_url_dialog_body">Vložte jednu nebo dvě přímé základní URL adresy pro arkádové hry. Pokud použijete dvě, vložte 2D URL jako první a 3D URL jako druhou, oddělené mezerou. Nechte prázdné, abyste znovu použili vestavěný zdroj.</string>
 </resources>
